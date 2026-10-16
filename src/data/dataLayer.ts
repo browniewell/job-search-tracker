@@ -12,11 +12,69 @@ export interface Status {
   isApplied: boolean
 }
 
-export interface Role {
-  id: string
+export type WorkArrangement = 'on-site' | 'hybrid' | 'remote'
+export type SalaryPeriod = 'annual' | 'hourly'
+export type FitRating = 1 | 2 | 3 | 4 | 5
+
+/** The fields of a Role you can edit directly. Empty fields are null. */
+export interface RoleFields {
   title: string
+  location: string | null
+  workArrangement: WorkArrangement | null
+  /** Posted salary range, in USD. */
+  salaryMin: number | null
+  salaryMax: number | null
+  salaryPeriod: SalaryPeriod | null
+  salaryNote: string | null
+  expectedSalary: number | null
+  /** Private: never exported to CSV. */
+  minimumSalary: number | null
+  jobSummary: string | null
+  postingLink: string | null
+  hiringSiteLink: string | null
+  /** Calendar date, YYYY-MM-DD. */
+  postingDate: string | null
+  postingCopy: string | null
+  fitNotes: string | null
+  fitRating: FitRating | null
+  referralSubmitted: boolean
+  nextAction: string | null
+  /** Calendar date, YYYY-MM-DD. */
+  nextActionDate: string | null
+  notes: string | null
+}
+
+export interface Role extends RoleFields {
+  id: string
   statusId: string
   createdAt: string
+  /** When the Posting copy was last saved, from the clock. */
+  postingCopySavedAt: string | null
+}
+
+type EmptyRole = Omit<Role, 'id' | 'title' | 'statusId' | 'createdAt'>
+
+const emptyRole: EmptyRole = {
+  location: null,
+  workArrangement: null,
+  salaryMin: null,
+  salaryMax: null,
+  salaryPeriod: null,
+  salaryNote: null,
+  expectedSalary: null,
+  minimumSalary: null,
+  jobSummary: null,
+  postingLink: null,
+  hiringSiteLink: null,
+  postingDate: null,
+  postingCopy: null,
+  fitNotes: null,
+  fitRating: null,
+  referralSubmitted: false,
+  nextAction: null,
+  nextActionDate: null,
+  notes: null,
+  postingCopySavedAt: null,
 }
 
 // Status names are copied onto each entry so a timeline still reads correctly
@@ -46,6 +104,21 @@ const defaultStatuses: Array<Pick<Status, 'name' | 'closed' | 'isApplied'>> = [
   { name: 'Passed', closed: true, isApplied: false },
 ]
 
+function requireTitle(title: string): string {
+  const trimmed = title.trim()
+  if (!trimmed) throw new Error('A Role needs a title')
+  return trimmed
+}
+
+function checkFitRating(fitRating: FitRating | null): void {
+  if (
+    fitRating !== null &&
+    !(Number.isInteger(fitRating) && fitRating >= 1 && fitRating <= 5)
+  ) {
+    throw new Error('Fit rating must be a whole number from 1 to 5')
+  }
+}
+
 type Database = Dexie & {
   statuses: EntityTable<Status, 'id'>
   roles: EntityTable<Role, 'id'>
@@ -55,6 +128,10 @@ type Database = Dexie & {
 export interface DataLayer {
   createRole(input: { title: string }): Promise<Role>
   listRoles(): Promise<Role[]>
+  getRole(id: string): Promise<Role | undefined>
+  updateRole(id: string, changes: Partial<RoleFields>): Promise<Role>
+  /** Deletes the Role and everything that belongs to it, in one transaction. */
+  deleteRole(id: string): Promise<void>
   getStatusHistory(roleId: string): Promise<StatusHistoryEntry[]>
   listStatuses(): Promise<Status[]>
   close(): void
@@ -70,6 +147,17 @@ export async function openDataLayer(options: {
     roles: 'id, createdAt',
     statusHistory: 'id, roleId',
   })
+  // v2 adds all Role fields; Roles saved by v1 get them empty.
+  db.version(2).upgrade((tx) =>
+    tx
+      .table('roles')
+      .toCollection()
+      .modify((role: Record<string, unknown>) => {
+        for (const [field, empty] of Object.entries(emptyRole)) {
+          if (!(field in role)) role[field] = empty
+        }
+      }),
+  )
   db.on('populate', (tx) => {
     tx.table('statuses').bulkAdd(
       defaultStatuses.map((status, order) => ({
@@ -95,7 +183,8 @@ export async function openDataLayer(options: {
           const now = options.clock().toISOString()
           const role: Role = {
             id: crypto.randomUUID(),
-            title,
+            ...emptyRole,
+            title: requireTitle(title),
             statusId: initial.id,
             createdAt: now,
           }
@@ -114,6 +203,27 @@ export async function openDataLayer(options: {
         },
       ),
     listRoles: () => db.roles.orderBy('createdAt').toArray(),
+    getRole: (id) => db.roles.get(id),
+    updateRole: (id, changes) =>
+      db.transaction('rw', db.roles, async () => {
+        const role = await db.roles.get(id)
+        if (!role) throw new Error(`No Role with id ${id}`)
+        const updated: Role = { ...role, ...changes }
+        updated.title = requireTitle(updated.title)
+        checkFitRating(updated.fitRating)
+        // The saved date tracks the Posting copy text, not other edits.
+        if (updated.postingCopy !== role.postingCopy) {
+          updated.postingCopySavedAt =
+            updated.postingCopy === null ? null : options.clock().toISOString()
+        }
+        await db.roles.put(updated)
+        return updated
+      }),
+    deleteRole: (id) =>
+      db.transaction('rw', db.roles, db.statusHistory, async () => {
+        await db.statusHistory.where('roleId').equals(id).delete()
+        await db.roles.delete(id)
+      }),
     getStatusHistory: (roleId) =>
       db.statusHistory.where('roleId').equals(roleId).sortBy('at'),
     listStatuses: () => db.statuses.orderBy('order').toArray(),

@@ -8,6 +8,8 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   test: {
+    // Dates render in local time; pin it so tests read the same everywhere.
+    env: { TZ: 'America/Chicago' },
     setupFiles: ['./src/test/setup.ts'],
     projects: [
       {

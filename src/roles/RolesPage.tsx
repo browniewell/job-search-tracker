@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import type { Role } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 
@@ -44,7 +45,9 @@ export function RolesPage() {
       ) : (
         <ul aria-label="Roles" className="roles-list">
           {roles.map((role) => (
-            <li key={role.id}>{role.title}</li>
+            <li key={role.id}>
+              <Link to={`/roles/${role.id}`}>{role.title}</Link>
+            </li>
           ))}
         </ul>
       )}
