@@ -66,7 +66,7 @@ describe('Role detail page', () => {
     const { user, unmount } = await openRoleDetail(data, 'QA Engineer')
 
     await user.click(screen.getByRole('button', { name: 'Edit' }))
-    const title = screen.getByLabelText('Title')
+    const title = screen.getByLabelText('Role title')
     await user.clear(title)
     await user.type(title, 'Senior QA Engineer')
     await user.type(screen.getByLabelText('Location'), 'Chicago, IL')
@@ -102,7 +102,7 @@ describe('Role detail page', () => {
       expectShown('Location', 'Chicago, IL')
       expectShown('Work arrangement', 'Hybrid')
       expectShown('Posted salary', '$120,000 – $150,000 per year')
-      expectShown('Minimum salary', '$125,000')
+      expectShown('Minimum salary', '$125,000 per year')
       expectShown('Posting date', 'Oct 1, 2026')
       expectShown('Posting copy', 'We are hiring a QA lead')
       expectShown('Posting copy', 'Saved Oct 16, 2026')

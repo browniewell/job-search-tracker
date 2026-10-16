@@ -2,9 +2,9 @@ import type { ReactNode } from 'react'
 import type { Role } from '../data/dataLayer'
 import {
   formatCalendarDate,
-  formatMoney,
   formatPostedSalary,
   formatTimestampDate,
+  formatYearlySalary,
   safeHref,
   workArrangementLabels,
 } from './format'
@@ -65,18 +65,20 @@ export function RoleFieldsView({
         <Field label="Work arrangement">
           {role.workArrangement && workArrangementLabels[role.workArrangement]}
         </Field>
-        <Field label="Job summary">
-          <Text value={role.jobSummary} />
+        <Field label="Role summary">
+          <Text value={role.roleSummary} />
         </Field>
       </Group>
       <Group title="Pay">
         <Field label="Posted salary">{formatPostedSalary(role)}</Field>
         <Field label="Salary note">{role.salaryNote}</Field>
         <Field label="Expected salary">
-          {role.expectedSalary !== null && formatMoney(role.expectedSalary)}
+          {role.expectedSalary !== null &&
+            formatYearlySalary(role.expectedSalary)}
         </Field>
         <Field label="Minimum salary">
-          {role.minimumSalary !== null && formatMoney(role.minimumSalary)}
+          {role.minimumSalary !== null &&
+            formatYearlySalary(role.minimumSalary)}
         </Field>
       </Group>
       <Group title="Posting">

@@ -103,7 +103,7 @@ describe('Role fields', () => {
       salaryNote: null,
       expectedSalary: null,
       minimumSalary: null,
-      jobSummary: null,
+      roleSummary: null,
       postingLink: null,
       hiringSiteLink: null,
       postingDate: null,
@@ -168,7 +168,7 @@ describe('Editing a Role', () => {
       referralSubmitted: true,
       nextAction: 'Email the recruiter',
       nextActionDate: '2026-10-20',
-      jobSummary: 'Own test strategy for the payments team',
+      roleSummary: 'Own test strategy for the payments team',
       postingLink: 'https://www.linkedin.com/jobs/view/123',
       hiringSiteLink: 'https://careers.example.com/jobs/456',
       postingCopy: 'We are hiring a QA lead',
@@ -193,7 +193,7 @@ describe('Editing a Role', () => {
       referralSubmitted: true,
       nextAction: 'Email the recruiter',
       nextActionDate: '2026-10-20',
-      jobSummary: 'Own test strategy for the payments team',
+      roleSummary: 'Own test strategy for the payments team',
       postingLink: 'https://www.linkedin.com/jobs/view/123',
       hiringSiteLink: 'https://careers.example.com/jobs/456',
       postingCopy: 'We are hiring a QA lead',
@@ -287,5 +287,28 @@ describe('Deleting a Role', () => {
       'Senior QA Engineer',
     ])
     expect(await data.getStatusHistory(kept.id)).toHaveLength(1)
+  })
+  it('Given a Role saved with a Job summary (schema v2), when the database is opened, then it reads back as its Role summary', async () => {
+    const name = uniqueDatabaseName()
+    const v2 = new Dexie(name)
+    v2.version(2).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt',
+      statusHistory: 'id, roleId',
+    })
+    await v2.table('roles').add({
+      id: 'role-1',
+      title: 'Senior QA Engineer',
+      statusId: 'status-1',
+      createdAt: '2026-10-16T14:30:00.000Z',
+      jobSummary: 'Own test strategy for the payments team',
+    })
+    v2.close()
+
+    const data = await openTestDataLayer({ name })
+
+    const role = await data.getRole('role-1')
+    expect(role?.roleSummary).toBe('Own test strategy for the payments team')
+    expect(role).not.toHaveProperty('jobSummary')
   })
 })

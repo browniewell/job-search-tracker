@@ -26,10 +26,11 @@ export interface RoleFields {
   salaryMax: number | null
   salaryPeriod: SalaryPeriod | null
   salaryNote: string | null
+  /** Yearly, in USD, whatever the Salary period. */
   expectedSalary: number | null
-  /** Private: never exported to CSV. */
+  /** Yearly, in USD. Private: never exported to CSV. */
   minimumSalary: number | null
-  jobSummary: string | null
+  roleSummary: string | null
   postingLink: string | null
   hiringSiteLink: string | null
   /** Calendar date, YYYY-MM-DD. */
@@ -63,7 +64,7 @@ const emptyRole: EmptyRole = {
   salaryNote: null,
   expectedSalary: null,
   minimumSalary: null,
-  jobSummary: null,
+  roleSummary: null,
   postingLink: null,
   hiringSiteLink: null,
   postingDate: null,
@@ -155,6 +156,18 @@ export async function openDataLayer(options: {
       .modify((role: Record<string, unknown>) => {
         for (const [field, empty] of Object.entries(emptyRole)) {
           if (!(field in role)) role[field] = empty
+        }
+      }),
+  )
+  // v3 renames Job summary to Role summary (GLOSSARY.md).
+  db.version(3).upgrade((tx) =>
+    tx
+      .table('roles')
+      .toCollection()
+      .modify((role: Record<string, unknown>) => {
+        if ('jobSummary' in role) {
+          role.roleSummary = role.jobSummary
+          delete role.jobSummary
         }
       }),
   )
