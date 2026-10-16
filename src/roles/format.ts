@@ -32,6 +32,11 @@ export function formatMoney(amount: number): string {
   return money.format(amount)
 }
 
+/** Expected and Minimum salary are always yearly (GLOSSARY.md). */
+export function formatYearlySalary(amount: number): string {
+  return `${formatMoney(amount)} per year`
+}
+
 export function formatPostedSalary(
   role: Pick<Role, 'salaryMin' | 'salaryMax' | 'salaryPeriod'>,
 ): string | null {

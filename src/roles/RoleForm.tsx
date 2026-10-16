@@ -26,7 +26,7 @@ function toFormValues(role: Role): FormValues {
     salaryNote: text(role.salaryNote),
     expectedSalary: text(role.expectedSalary),
     minimumSalary: text(role.minimumSalary),
-    jobSummary: text(role.jobSummary),
+    roleSummary: text(role.roleSummary),
     postingLink: text(role.postingLink),
     hiringSiteLink: text(role.hiringSiteLink),
     postingDate: text(role.postingDate),
@@ -53,7 +53,7 @@ function toRoleFields(values: FormValues): RoleFields {
     salaryNote: text(values.salaryNote),
     expectedSalary: number(values.expectedSalary),
     minimumSalary: number(values.minimumSalary),
-    jobSummary: text(values.jobSummary),
+    roleSummary: text(values.roleSummary),
     postingLink: text(values.postingLink),
     hiringSiteLink: text(values.hiringSiteLink),
     postingDate: text(values.postingDate),
@@ -180,7 +180,7 @@ export function RoleForm({
       )}
       <fieldset>
         <legend>Overview</legend>
-        <Row id={idFor('title')} label="Title">
+        <Row id={idFor('title')} label="Role title">
           <input
             id={idFor('title')}
             required
@@ -195,7 +195,7 @@ export function RoleForm({
           'Not set',
           Object.entries(workArrangementLabels),
         )}
-        {textArea('jobSummary', 'Job summary')}
+        {textArea('roleSummary', 'Role summary')}
       </fieldset>
       <fieldset>
         <legend>Pay (USD)</legend>
@@ -208,12 +208,17 @@ export function RoleForm({
           Object.entries(salaryPeriodLabels),
         )}
         {textInput('salaryNote', 'Salary note', 'text', 'e.g. OTE, + equity')}
-        {textInput('expectedSalary', 'Expected salary', 'number')}
+        {textInput(
+          'expectedSalary',
+          'Expected salary',
+          'number',
+          'Per year, even for an hourly Role.',
+        )}
         {textInput(
           'minimumSalary',
           'Minimum salary',
           'number',
-          'Private: never exported to CSV.',
+          'Per year. Private: never exported to CSV.',
         )}
       </fieldset>
       <fieldset>
