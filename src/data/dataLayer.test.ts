@@ -380,6 +380,35 @@ describe('Companies', () => {
     expect((await data.listCompanies()).map((c) => c.name)).toEqual(['Acme'])
   })
 
+  it('Given Acme, when another Company is created or renamed to the same name ignoring case, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+    await data.createCompany({ name: 'Acme' })
+    const globex = await data.createCompany({ name: 'Globex' })
+
+    for (const name of ['acme', '  ACME  ']) {
+      await expect(data.createCompany({ name })).rejects.toThrow(
+        'There is already a Company called Acme',
+      )
+    }
+    await expect(
+      data.updateCompany(globex.id, { name: 'acme' }),
+    ).rejects.toThrow('There is already a Company called Acme')
+
+    expect((await data.listCompanies()).map((c) => c.name)).toEqual([
+      'Acme',
+      'Globex',
+    ])
+  })
+
+  it('Given Acme, when Acme itself is renamed to ACME, then the rename is kept', async () => {
+    const data = await openTestDataLayer()
+    const acme = await data.createCompany({ name: 'Acme' })
+
+    await data.updateCompany(acme.id, { name: 'ACME' })
+
+    expect((await data.getCompany(acme.id))?.name).toBe('ACME')
+  })
+
   it('Given a Company, when its fields are edited, then the edits are kept after the database is reopened', async () => {
     const name = uniqueDatabaseName()
     const first = await openTestDataLayer({ name })

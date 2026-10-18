@@ -39,6 +39,27 @@ describe('Company pages', () => {
     expect(screen.getByText('No Roles at Acme yet.')).toBeInTheDocument()
   })
 
+  it('Given Acme, when I add "acme" from the Companies page, then I am told it already exists and nothing is added', async () => {
+    const data = await openTestDataLayer()
+    await data.createCompany({ name: 'Acme' })
+    const user = userEvent.setup()
+    render(<App data={data} />)
+    await user.click(await screen.findByRole('link', { name: 'Companies' }))
+
+    await user.type(await screen.findByLabelText('Company name'), 'acme')
+    await user.click(screen.getByRole('button', { name: 'Add Company' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'There is already a Company called Acme',
+    )
+    expect(screen.getByLabelText('Company name')).toHaveValue('acme')
+    expect(
+      within(screen.getByRole('list', { name: 'Companies' })).getAllByRole(
+        'listitem',
+      ),
+    ).toHaveLength(1)
+  })
+
   it('Given a Company, when I edit its fields and save, then its page shows them', async () => {
     const data = await openTestDataLayer()
     await data.createCompany({ name: 'Acme' })

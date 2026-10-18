@@ -7,6 +7,7 @@ export function CompaniesPage() {
   const data = useDataLayer()
   const [companies, setCompanies] = useState<Company[] | null>(null)
   const [name, setName] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -21,7 +22,13 @@ export function CompaniesPage() {
   async function addCompany(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!name.trim()) return
-    await data.createCompany({ name })
+    try {
+      await data.createCompany({ name })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+      return
+    }
+    setError(null)
     setName('')
     setCompanies(await data.listCompanies())
   }
@@ -39,6 +46,11 @@ export function CompaniesPage() {
         />
         <button type="submit">Add Company</button>
       </form>
+      {error && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
       {companies === null ? null : companies.length === 0 ? (
         <p>No Companies yet. Add the first one above.</p>
       ) : (

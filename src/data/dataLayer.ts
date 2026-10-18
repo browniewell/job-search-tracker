@@ -242,6 +242,19 @@ export async function openDataLayer(options: {
   })
   await db.open()
 
+  // Each Company appears once: names are unique, ignoring case.
+  async function checkCompanyNameIsFree({ id, name }: Company) {
+    const lower = name.toLocaleLowerCase()
+    const taken = await db.companies
+      .filter(
+        (other) => other.id !== id && other.name.toLocaleLowerCase() === lower,
+      )
+      .first()
+    if (taken) {
+      throw new Error(`There is already a Company called ${taken.name}`)
+    }
+  }
+
   return {
     createRole: ({ title }) =>
       db.transaction(
@@ -303,15 +316,17 @@ export async function openDataLayer(options: {
         await db.statusHistory.where('roleId').equals(id).delete()
         await db.roles.delete(id)
       }),
-    async createCompany({ name }) {
-      const company: Company = {
-        id: crypto.randomUUID(),
-        ...emptyCompany,
-        name: requireCompanyName(name),
-      }
-      await db.companies.add(company)
-      return company
-    },
+    createCompany: ({ name }) =>
+      db.transaction('rw', db.companies, async () => {
+        const company: Company = {
+          id: crypto.randomUUID(),
+          ...emptyCompany,
+          name: requireCompanyName(name),
+        }
+        await checkCompanyNameIsFree(company)
+        await db.companies.add(company)
+        return company
+      }),
     listCompanies: async () =>
       (await db.companies.toArray()).sort(byNameIgnoringCase),
     getCompany: (id) => db.companies.get(id),
@@ -333,6 +348,7 @@ export async function openDataLayer(options: {
         if (!company) throw new Error(`No Company with id ${id}`)
         const updated: Company = { ...company, ...changes }
         updated.name = requireCompanyName(updated.name)
+        await checkCompanyNameIsFree(updated)
         await db.companies.put(updated)
         return updated
       }),
