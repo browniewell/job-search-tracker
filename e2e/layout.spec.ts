@@ -23,6 +23,9 @@ async function overflowing(page: Page): Promise<string[]> {
 }
 
 for (const [device, viewport] of [
+  // Font metrics differ by OS: the narrowest phone shows locally what CI's
+  // wider fonts show at 375.
+  ['small phone', { width: 320, height: 640 }],
   ['phone', { width: 375, height: 812 }],
   ['desktop', { width: 1280, height: 800 }],
 ] as const) {
