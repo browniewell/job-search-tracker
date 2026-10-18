@@ -45,12 +45,8 @@ const features = tableFeatures({
 
 const helper = createColumnHelper<typeof features, RoleRow>()
 
-// From on-site to remote, rather than by name.
-const workArrangementOrder: Record<WorkArrangement, number> = {
-  'on-site': 0,
-  hybrid: 1,
-  remote: 2,
-}
+// From on-site to remote, as the labels list them, rather than by name.
+const workArrangements = Object.keys(workArrangementLabels) as WorkArrangement[]
 
 // A full-time year, so hourly and yearly Posted salaries compare.
 const hoursPerYear = 40 * 52
@@ -61,6 +57,9 @@ function yearlyPostedSalary(role: Role): number | undefined {
   if (top === null) return undefined
   return role.salaryPeriod === 'hourly' ? top * hoursPerYear : top
 }
+
+const calendarDateCell = (date: string | undefined) =>
+  date && formatCalendarDate(date)
 
 /** The Company filter's value for Roles with no Company linked. */
 const noCompany = 'none'
@@ -111,7 +110,7 @@ const columns = helper.columns([
     (row) =>
       row.role.workArrangement === null
         ? undefined
-        : workArrangementOrder[row.role.workArrangement],
+        : workArrangements.indexOf(row.role.workArrangement),
     {
       id: 'workArrangement',
       header: 'Work arrangement',
@@ -153,20 +152,14 @@ const columns = helper.columns([
         (to === null || date <= to)
       )
     },
-    cell: ({ getValue }) => {
-      const date = getValue()
-      return date && formatCalendarDate(date)
-    },
+    cell: ({ getValue }) => calendarDateCell(getValue()),
   }),
   helper.accessor((row) => row.role.nextActionDate ?? undefined, {
     id: 'nextActionDate',
     header: 'Next action date',
     sortFn: 'text',
     sortUndefined: 'last',
-    cell: ({ getValue }) => {
-      const date = getValue()
-      return date && formatCalendarDate(date)
-    },
+    cell: ({ getValue }) => calendarDateCell(getValue()),
   }),
   helper.accessor((row) => row.flags.length || undefined, {
     id: 'flags',
@@ -221,15 +214,15 @@ export function RolesTable({
     sortDescFirst: false,
   })
 
-  const status = table.getColumn('status')
-  const company = table.getColumn('company')
-  const workArrangement = table.getColumn('workArrangement')
-  const postingDate = table.getColumn('postingDate')
-  const postingDates = (postingDate?.getFilterValue() as
+  const statusColumn = table.getColumn('status')
+  const companyColumn = table.getColumn('company')
+  const workArrangementColumn = table.getColumn('workArrangement')
+  const postingDateColumn = table.getColumn('postingDate')
+  const postingDates = (postingDateColumn?.getFilterValue() as
     DateRange | undefined) ?? { from: null, to: null }
   function setPostingDates(changes: Partial<DateRange>) {
     const range = { ...postingDates, ...changes }
-    postingDate?.setFilterValue(
+    postingDateColumn?.setFilterValue(
       range.from === null && range.to === null ? undefined : range,
     )
   }
@@ -242,15 +235,15 @@ export function RolesTable({
         <FilterSelect
           id="filter-status"
           label="Status"
-          value={status?.getFilterValue() as string | undefined}
-          onChange={(value) => status?.setFilterValue(value)}
+          value={statusColumn?.getFilterValue() as string | undefined}
+          onChange={(value) => statusColumn?.setFilterValue(value)}
           options={statuses.map((s) => ({ value: s.id, label: s.name }))}
         />
         <FilterSelect
           id="filter-company"
           label="Company"
-          value={company?.getFilterValue() as string | undefined}
-          onChange={(value) => company?.setFilterValue(value)}
+          value={companyColumn?.getFilterValue() as string | undefined}
+          onChange={(value) => companyColumn?.setFilterValue(value)}
           options={[
             ...companies.map((c) => ({ value: c.id, label: c.name })),
             { value: noCompany, label: companyNotDisclosed },
@@ -259,11 +252,12 @@ export function RolesTable({
         <FilterSelect
           id="filter-work-arrangement"
           label="Work arrangement"
-          value={workArrangement?.getFilterValue() as string | undefined}
-          onChange={(value) => workArrangement?.setFilterValue(value)}
-          options={Object.entries(workArrangementLabels).map(
-            ([value, label]) => ({ value, label }),
-          )}
+          value={workArrangementColumn?.getFilterValue() as string | undefined}
+          onChange={(value) => workArrangementColumn?.setFilterValue(value)}
+          options={workArrangements.map((value) => ({
+            value,
+            label: workArrangementLabels[value],
+          }))}
         />
         <div className="table-filter">
           <label htmlFor="filter-posted-from">Posting date from</label>

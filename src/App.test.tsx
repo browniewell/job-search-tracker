@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { App } from './App'
 import { openTestDataLayer, uniqueDatabaseName } from './test/dataLayers'
 
-describe('Roles list', () => {
+describe('Roles table', () => {
   it('Given no Roles, when I add a Role by title, then it appears in the Roles table', async () => {
     const user = userEvent.setup()
     render(<App data={await openTestDataLayer()} />)
