@@ -20,6 +20,8 @@ export interface CompanyFields {
   website: string | null
   /** Company size, free text, e.g. "51–200 (143 on LinkedIn)". */
   size: string | null
+  /** Dealbreaker Flags, shown on every Role at the Company too. */
+  flags: string[]
   notes: string | null
 }
 
@@ -32,6 +34,7 @@ const emptyCompany: Omit<CompanyFields, 'name'> = {
   summary: null,
   website: null,
   size: null,
+  flags: [],
   notes: null,
 }
 
@@ -64,6 +67,8 @@ export interface RoleFields {
   fitNotes: string | null
   fitRating: FitRating | null
   referralSubmitted: boolean
+  /** Process concerns, such as "Workday portal". */
+  flags: string[]
   nextAction: string | null
   /** Calendar date, YYYY-MM-DD. */
   nextActionDate: string | null
@@ -100,6 +105,7 @@ const emptyRole: EmptyRole = {
   fitNotes: null,
   fitRating: null,
   referralSubmitted: false,
+  flags: [],
   nextAction: null,
   nextActionDate: null,
   parkedReason: null,
@@ -152,6 +158,45 @@ function requireCompanyName(name: string): string {
   const trimmed = name.trim()
   if (!trimmed) throw new Error('A Company needs a name')
   return trimmed
+}
+
+const flagKey = (flag: string) => flag.trim().toLocaleLowerCase()
+
+/** Flags match ignoring case and surrounding spaces. */
+export function sameFlag(a: string, b: string): boolean {
+  return flagKey(a) === flagKey(b)
+}
+
+// Each Flag once, as first written.
+function normalizeFlags(flags: string[]): string[] {
+  const seen = new Set<string>()
+  const kept: string[] = []
+  for (const flag of flags.map((f) => f.trim())) {
+    if (flag && !seen.has(flagKey(flag))) {
+      seen.add(flagKey(flag))
+      kept.push(flag)
+    }
+  }
+  return kept
+}
+
+/** A Flag as a badge shows it, with the Company it comes from, if any. */
+export interface ShownFlag {
+  flag: string
+  from?: string
+}
+
+/** A Role's own Flags, then its Company's dealbreakers it doesn't repeat. */
+export function flagsShownOnRole(
+  role: Role,
+  company: Company | undefined,
+): ShownFlag[] {
+  const own = role.flags.map((flag) => ({ flag }))
+  if (!company) return own
+  const dealbreakers = company.flags.filter(
+    (flag) => !role.flags.some((ownFlag) => sameFlag(ownFlag, flag)),
+  )
+  return [...own, ...dealbreakers.map((flag) => ({ flag, from: company.name }))]
 }
 
 function checkFitRating(fitRating: FitRating | null): void {
@@ -212,6 +257,8 @@ export interface DataLayer {
   /** The Roles linked to a Company, in the order they were created. */
   listRolesAtCompany(companyId: string): Promise<Role[]>
   listStatuses(): Promise<Status[]>
+  /** Every Flag used on a Role or Company, each once, by name ignoring case. */
+  listFlagSuggestions(): Promise<string[]>
   close(): void
 }
 
@@ -225,16 +272,18 @@ export async function openDataLayer(options: {
     roles: 'id, createdAt',
     statusHistory: 'id, roleId',
   })
-  // Roles saved before a field existed get it empty.
-  const fillMissingRoleFields = (tx: Transaction) =>
-    tx
-      .table('roles')
-      .toCollection()
-      .modify((role: Record<string, unknown>) => {
-        for (const [field, empty] of Object.entries(emptyRole)) {
-          if (!(field in role)) role[field] = empty
-        }
-      })
+  // Records saved before a field existed get it empty.
+  const fillMissingFields =
+    (table: string, empty: object) => (tx: Transaction) =>
+      tx
+        .table(table)
+        .toCollection()
+        .modify((record: Record<string, unknown>) => {
+          for (const [field, value] of Object.entries(empty)) {
+            if (!(field in record)) record[field] = value
+          }
+        })
+  const fillMissingRoleFields = fillMissingFields('roles', emptyRole)
   // v2 adds all Role fields.
   db.version(2).upgrade(fillMissingRoleFields)
   // v3 renames Job summary to Role summary (GLOSSARY.md).
@@ -271,6 +320,11 @@ export async function openDataLayer(options: {
       entry.sequence = sequence
     }
     await tx.table('statusHistory').bulkPut(entries)
+  })
+  // v6 adds Flags to Roles and Companies.
+  db.version(6).upgrade(async (tx) => {
+    await fillMissingRoleFields(tx)
+    await fillMissingFields('companies', emptyCompany)(tx)
   })
   db.on('populate', (tx) => {
     tx.table('statuses').bulkAdd(
@@ -338,6 +392,7 @@ export async function openDataLayer(options: {
         if (!role) throw new Error(`No Role with id ${id}`)
         const updated: Role = { ...role, ...changes }
         updated.title = requireTitle(updated.title)
+        updated.flags = normalizeFlags(updated.flags)
         checkFitRating(updated.fitRating)
         if (
           updated.companyId !== null &&
@@ -390,6 +445,7 @@ export async function openDataLayer(options: {
         if (!company) throw new Error(`No Company with id ${id}`)
         const updated: Company = { ...company, ...changes }
         updated.name = requireCompanyName(updated.name)
+        updated.flags = normalizeFlags(updated.flags)
         await checkCompanyNameIsFree(updated)
         await db.companies.put(updated)
         return updated
@@ -432,6 +488,23 @@ export async function openDataLayer(options: {
     getStatusHistory: (roleId) =>
       db.statusHistory.where('roleId').equals(roleId).sortBy('sequence'),
     listStatuses: () => db.statuses.orderBy('order').toArray(),
+    listFlagSuggestions: () =>
+      db.transaction('r', db.roles, db.companies, async () => {
+        const used = [
+          ...(await db.roles.toArray()),
+          ...(await db.companies.toArray()),
+        ].flatMap((item) => item.flags)
+        // Sorting before dropping repeats picks the same spelling of a Flag
+        // used in different cases every time, whatever order items load in:
+        // capitalised before lower case.
+        return normalizeFlags(
+          used.sort(
+            (a, b) =>
+              a.localeCompare(b, undefined, { sensitivity: 'base' }) ||
+              b.localeCompare(a),
+          ),
+        )
+      }),
     close: () => db.close(),
   }
 }

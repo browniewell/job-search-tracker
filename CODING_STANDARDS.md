@@ -11,7 +11,7 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 
   An entry for a version that has reached main stays as it is: editing it in place, rather than adding a version, is a breach, because browsers already hold data in that shape.
 
-- **Empty values are `null`**, with every field present on every record. Booleans default to `false`. Empty strings never stand in for "not set".
+- **Empty values are `null`**, with every field present on every record. Booleans default to `false` and lists, such as Flags, to `[]`. Empty strings never stand in for "not set".
 - **Domain rules live in the data layer.** Validation and deletion rules (blank names, Fit rating range, a Company with Roles) are enforced in `src/data`. The UI may check first for a better flow, but it shows the data layer's own error message rather than writing its own.
 - **Time comes from the injected clock.** Timestamps are ISO strings from `clock()`. Calendar dates the user picks are `YYYY-MM-DD` strings.
 
