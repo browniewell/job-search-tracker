@@ -30,6 +30,7 @@ Then open the URL Vite prints (usually <http://localhost:5173>).
 | `npm run lint`      | ESLint and a Prettier format check                                          |
 | `npm run format`    | Rewrite files with Prettier                                                 |
 | `npm run typecheck` | TypeScript, no emit                                                         |
+| `npm run check`     | Typecheck and ESLint together: the quick check while working                |
 | `npm test`          | Vitest: data-layer tests in Node, UI tests in jsdom, both on fake-indexeddb |
 | `npm run test:e2e`  | Playwright smoke test against the production build                          |
 | `npm run build`     | Production build into `dist/`                                               |
