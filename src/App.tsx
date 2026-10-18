@@ -3,6 +3,7 @@ import { CompaniesPage } from './companies/CompaniesPage'
 import { CompanyDetailPage } from './companies/CompanyDetailPage'
 import type { DataLayer } from './data/dataLayer'
 import { DataLayerContext } from './dataContext'
+import { PipelineBoardPage } from './roles/PipelineBoardPage'
 import { RoleDetailPage } from './roles/RoleDetailPage'
 import { RolesPage } from './roles/RolesPage'
 
@@ -16,12 +17,14 @@ export function App({ data }: { data: DataLayer }) {
             <NavLink to="/" end>
               Roles
             </NavLink>
+            <NavLink to="/board">Pipeline board</NavLink>
             <NavLink to="/companies">Companies</NavLink>
           </nav>
         </header>
         <main>
           <Routes>
             <Route path="/" element={<RolesPage />} />
+            <Route path="/board" element={<PipelineBoardPage />} />
             <Route path="/roles/:roleId" element={<RoleDetailPage />} />
             <Route path="/companies" element={<CompaniesPage />} />
             <Route

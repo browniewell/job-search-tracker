@@ -98,6 +98,10 @@ _Avoid_: Skip, skipped, declined
 A Status that ends a pursuit (by default Accepted, Rejected, No Response, Withdrawn, Passed); hidden from the pipeline board unless asked for.
 _Avoid_: Final, terminal, archived
 
+**Pipeline board**:
+Your Roles as cards in one column per Status; moving a card to another column changes its Status.
+_Avoid_: Kanban, board view
+
 **Status history**:
 The automatic record of every Status change on a Role: from, to and when, starting with the Status it was created in. Never entered or edited by hand.
 _Avoid_: Audit log, activity

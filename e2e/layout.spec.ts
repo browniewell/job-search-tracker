@@ -54,7 +54,7 @@ for (const [device, viewport] of [
   ['phone', { width: 375, height: 812 }],
   ['desktop', { width: 1280, height: 800 }],
 ] as const) {
-  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each and list Roles, then nothing spills out of its container and axe finds no accessibility problems`, async ({
+  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each, list Roles and open the Pipeline board, then nothing spills out of its container and axe finds no accessibility problems`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport)
@@ -86,5 +86,10 @@ for (const [device, viewport] of [
     await page.goto('/')
     await expect(page.getByRole('table', { name: 'Roles' })).toBeVisible()
     await checkPage(page, 'Roles table')
+
+    await page.getByRole('link', { name: 'Pipeline board' }).click()
+    await page.getByLabel('Show Closed statuses').check()
+    await expect(page.getByRole('note', { name: 'Flags' })).toBeVisible()
+    await checkPage(page, 'Pipeline board')
   })
 }

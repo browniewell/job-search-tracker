@@ -151,6 +151,12 @@ const defaultStatuses: Array<Pick<Status, 'name' | 'closed' | 'isApplied'>> = [
   { name: 'Passed', closed: true, isApplied: false },
 ]
 
+/** A moment's calendar date in local time, YYYY-MM-DD. */
+function localCalendarDate(moment: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${moment.getFullYear()}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())}`
+}
+
 function requireTitle(title: string): string {
   const trimmed = title.trim()
   if (!trimmed) throw new Error('A Role needs a title')
@@ -233,6 +239,7 @@ type Database = Dexie & {
 
 export interface DataLayer {
   createRole(input: { title: string }): Promise<Role>
+  /** Every Role, in the order added, then by Role title ignoring case. */
   listRoles(): Promise<Role[]>
   getRole(id: string): Promise<Role | undefined>
   updateRole(id: string, changes: Partial<RoleFields>): Promise<Role>
@@ -262,6 +269,8 @@ export interface DataLayer {
   listStatuses(): Promise<Status[]>
   /** Every Flag used on a Role or Company, each once, by name ignoring case. */
   listFlagSuggestions(): Promise<string[]>
+  /** Whether the Role's Next action date is today or past, by the local calendar day. */
+  isNextActionDue(role: Role): boolean
   close(): void
 }
 
@@ -389,7 +398,13 @@ export async function openDataLayer(options: {
           return role
         },
       ),
-    listRoles: () => db.roles.orderBy('createdAt').toArray(),
+    // Roles added together share a timestamp, so title breaks the tie.
+    listRoles: async () =>
+      (await db.roles.toArray()).sort(
+        (a, b) =>
+          a.createdAt.localeCompare(b.createdAt) ||
+          a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }),
+      ),
     getRole: (id) => db.roles.get(id),
     updateRole: (id, changes) =>
       db.transaction('rw', db.roles, db.companies, async () => {
@@ -510,6 +525,9 @@ export async function openDataLayer(options: {
           ),
         )
       }),
+    isNextActionDue: (role) =>
+      role.nextActionDate !== null &&
+      role.nextActionDate <= localCalendarDate(options.clock()),
     close: () => db.close(),
   }
 }
