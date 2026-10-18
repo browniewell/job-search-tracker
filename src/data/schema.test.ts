@@ -7,7 +7,11 @@ import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
 // ships with a new schema version, an upgrade and a test that opens the
 // previous version (CODING_STANDARDS.md). Add an entry for the new version;
 // an entry that has reached main stays as it is.
-const storedFields: Record<number, { role: string[]; company: string[] }> = {
+// Status history entries are recorded from v5 on.
+const storedFields: Record<
+  number,
+  { role: string[]; company: string[]; statusHistoryEntry?: string[] }
+> = {
   4: {
     role: [
       'companyId',
@@ -38,10 +42,52 @@ const storedFields: Record<number, { role: string[]; company: string[] }> = {
     ],
     company: ['id', 'industry', 'name', 'notes', 'size', 'summary', 'website'],
   },
+  5: {
+    role: [
+      'companyId',
+      'createdAt',
+      'expectedSalary',
+      'fitNotes',
+      'fitRating',
+      'hiringSiteLink',
+      'id',
+      'location',
+      'minimumSalary',
+      'nextAction',
+      'nextActionDate',
+      'notes',
+      'parkedReason',
+      'postingCopy',
+      'postingCopySavedAt',
+      'postingDate',
+      'postingLink',
+      'referralSubmitted',
+      'roleSummary',
+      'salaryMax',
+      'salaryMin',
+      'salaryNote',
+      'salaryPeriod',
+      'statusId',
+      'title',
+      'workArrangement',
+    ],
+    company: ['id', 'industry', 'name', 'notes', 'size', 'summary', 'website'],
+    statusHistoryEntry: [
+      'at',
+      'fromStatusId',
+      'fromStatusName',
+      'id',
+      'imported',
+      'roleId',
+      'sequence',
+      'toStatusId',
+      'toStatusName',
+    ],
+  },
 }
 
 describe('Schema tripwire', () => {
-  it('Given the current schema version, then Roles and Companies are stored with exactly the fields recorded for that version', async () => {
+  it('Given the current schema version, then Roles, Companies and Status history entries are stored with exactly the fields recorded for that version', async () => {
     const name = uniqueDatabaseName()
     const data = await openTestDataLayer({ name })
     const created = await data.createRole({ title: 'Senior QA Engineer' })
@@ -57,6 +103,9 @@ describe('Schema tripwire', () => {
     expect({
       role: Object.keys((await data.getRole(created.id))!).sort(),
       company: Object.keys((await data.getCompany(acme.id))!).sort(),
+      statusHistoryEntry: Object.keys(
+        (await data.getStatusHistory(created.id))[0],
+      ).sort(),
     }).toEqual(storedFields[version])
   })
 })

@@ -71,6 +71,7 @@ describe('Roles', () => {
         toStatusName: 'Interested',
         at: '2026-10-16T14:30:00.000Z',
         imported: false,
+        sequence: 0,
       },
     ])
   })
@@ -172,6 +173,61 @@ describe('Schema v4', () => {
 
     expect((await data.getRole('role-1'))?.companyId).toBeNull()
     expect(await data.listCompanies()).toEqual([])
+  })
+})
+
+describe('Schema v5', () => {
+  it('Given a Role and its Status history saved before Parked reasons existed (schema v4), when the database is opened, then the Role has no Parked reason and its history reads oldest first', async () => {
+    const name = uniqueDatabaseName()
+    const v4 = new Dexie(name)
+    v4.version(4).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt, companyId',
+      statusHistory: 'id, roleId',
+      companies: 'id',
+    })
+    await v4.table('roles').add({
+      id: 'role-1',
+      title: 'Senior QA Engineer',
+      statusId: 'status-2',
+      createdAt: '2026-10-16T14:30:00.000Z',
+    })
+    const entry = (id: string, to: string, at: string) => ({
+      id,
+      roleId: 'role-1',
+      fromStatusId: null,
+      fromStatusName: null,
+      toStatusId: to,
+      toStatusName: to,
+      at,
+      imported: false,
+    })
+    // Saved out of order, as random ids would leave them; the first two
+    // share a timestamp, as a Role changed straight after creation can.
+    await v4.table('statusHistory').bulkAdd([
+      entry('c', 'Applied', '2026-10-17T09:00:00.000Z'),
+      {
+        ...entry('a', 'Parked', '2026-10-16T14:30:00.000Z'),
+        fromStatusId: 'Interested',
+        fromStatusName: 'Interested',
+      },
+      entry('b', 'Interested', '2026-10-16T14:30:00.000Z'),
+    ])
+    v4.close()
+
+    const data = await openTestDataLayer({ name })
+
+    expect((await data.getRole('role-1'))?.parkedReason).toBeNull()
+    expect(
+      (await data.getStatusHistory('role-1')).map((e) => [
+        e.toStatusName,
+        e.sequence,
+      ]),
+    ).toEqual([
+      ['Interested', 0],
+      ['Parked', 1],
+      ['Applied', 2],
+    ])
   })
 })
 
@@ -299,6 +355,165 @@ describe('Fit rating', () => {
       ).rejects.toThrow('Fit rating must be a whole number from 1 to 5')
     }
     expect((await data.getRole(role.id))?.fitRating).toBeNull()
+  })
+})
+
+describe('Changing Status', () => {
+  it('Given a Role in Interested, when its Status is changed to Applied at 15:00, then it is in Applied and its Status history gains an entry from Interested to Applied at 15:00', async () => {
+    let now = new Date('2026-10-16T14:30:00.000Z')
+    const data = await openTestDataLayer({ clock: () => now })
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const statuses = await data.listStatuses()
+    const interested = statuses.find((s) => s.name === 'Interested')!
+    const applied = statuses.find((s) => s.name === 'Applied')!
+
+    now = new Date('2026-10-16T15:00:00.000Z')
+    const changed = await data.changeStatus(role.id, applied.id)
+
+    expect(changed.statusId).toBe(applied.id)
+    expect((await data.getRole(role.id))?.statusId).toBe(applied.id)
+    expect((await data.getStatusHistory(role.id)).at(-1)).toEqual({
+      id: expect.any(String),
+      roleId: role.id,
+      fromStatusId: interested.id,
+      fromStatusName: 'Interested',
+      toStatusId: applied.id,
+      toStatusName: 'Applied',
+      at: '2026-10-16T15:00:00.000Z',
+      imported: false,
+      sequence: 1,
+    })
+  })
+
+  it('Given a clock that never moves, when a Role is Parked, revived to Interested and then Applied, then its Status history reads in the order the changes were made', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const statuses = await data.listStatuses()
+    const idOf = (name: string) => statuses.find((s) => s.name === name)!.id
+
+    for (const name of ['Parked', 'Interested', 'Applied']) {
+      await data.changeStatus(role.id, idOf(name))
+    }
+
+    expect(
+      (await data.getStatusHistory(role.id)).map((entry) => [
+        entry.fromStatusName,
+        entry.toStatusName,
+      ]),
+    ).toEqual([
+      [null, 'Interested'],
+      ['Interested', 'Parked'],
+      ['Parked', 'Interested'],
+      ['Interested', 'Applied'],
+    ])
+  })
+
+  it('Given a Role in Interested, when it is changed to Interested again, then nothing is added to its Status history', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+
+    await data.changeStatus(role.id, role.statusId)
+
+    expect(await data.getStatusHistory(role.id)).toHaveLength(1)
+  })
+
+  it('Given no such Status, when a Role is changed to it, then it is rejected and neither the Role nor its Status history changes', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+
+    await expect(data.changeStatus(role.id, 'no-such-status')).rejects.toThrow(
+      'No Status with id no-such-status',
+    )
+
+    expect((await data.getRole(role.id))?.statusId).toBe(role.statusId)
+    expect(await data.getStatusHistory(role.id)).toHaveLength(1)
+  })
+})
+
+describe('Parked reason', () => {
+  it('Given a Role in Interested, when it is Parked with a Parked reason and later moved back to Interested, then the Parked reason is kept and the revival is an ordinary Status change', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    expect(role.parkedReason).toBeNull()
+    const statuses = await data.listStatuses()
+    const idOf = (name: string) => statuses.find((s) => s.name === name)!.id
+
+    const parked = await data.changeStatus(role.id, idOf('Parked'), {
+      parkedReason: 'Hands-on expectation',
+    })
+    expect(parked).toMatchObject({
+      statusId: idOf('Parked'),
+      parkedReason: 'Hands-on expectation',
+    })
+
+    await data.changeStatus(role.id, idOf('Interested'))
+
+    expect(await data.getRole(role.id)).toMatchObject({
+      statusId: idOf('Interested'),
+      parkedReason: 'Hands-on expectation',
+    })
+    expect((await data.getStatusHistory(role.id)).at(-1)).toMatchObject({
+      fromStatusName: 'Parked',
+      toStatusName: 'Interested',
+      imported: false,
+    })
+  })
+
+  it('Given a Parked Role, when it is changed to Parked again with a new Parked reason, then the reason is updated and nothing is added to its Status history', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const parkedId = (await data.listStatuses())[1].id
+    await data.changeStatus(role.id, parkedId, { parkedReason: 'Too far' })
+
+    await data.changeStatus(role.id, parkedId, {
+      parkedReason: 'Relocation required',
+    })
+
+    expect((await data.getRole(role.id))?.parkedReason).toBe(
+      'Relocation required',
+    )
+    expect(await data.getStatusHistory(role.id)).toHaveLength(2)
+  })
+
+  it('Given a Parked Role, when its Parked reason is edited, then the edit is kept', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+
+    await data.updateRole(role.id, { parkedReason: 'Relocation required' })
+
+    expect((await data.getRole(role.id))?.parkedReason).toBe(
+      'Relocation required',
+    )
+  })
+})
+
+describe('Status history is immutable', () => {
+  it('Given a Role with Status history, when the Role is edited, changes Status again and another Role is deleted, then its earlier entries are exactly as they were', async () => {
+    let now = new Date('2026-10-16T09:00:00.000Z')
+    const data = await openTestDataLayer({ clock: () => now })
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const other = await data.createRole({ title: 'QA Engineer' })
+    const statuses = await data.listStatuses()
+    const idOf = (name: string) => statuses.find((s) => s.name === name)!.id
+    await data.changeStatus(role.id, idOf('Applied'))
+    const before = await data.getStatusHistory(role.id)
+
+    now = new Date('2026-10-17T09:00:00.000Z')
+    await data.updateRole(role.id, { title: 'Lead QA Engineer' })
+    await data.changeStatus(role.id, idOf('Recruiter Screen'))
+    await data.deleteRole(other.id)
+
+    const after = await data.getStatusHistory(role.id)
+    expect(after.slice(0, 2)).toEqual(before)
+    expect(after).toHaveLength(3)
+  })
+
+  it('Given a data layer, when its operations are listed, then reading is the only thing it offers for Status history', async () => {
+    const data = await openTestDataLayer()
+
+    expect(
+      Object.keys(data).filter((operation) => /history/i.test(operation)),
+    ).toEqual(['getStatusHistory'])
   })
 })
 

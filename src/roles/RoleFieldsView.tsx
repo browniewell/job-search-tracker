@@ -19,10 +19,12 @@ export function RoleFieldsView({
   role,
   company,
   statusName,
+  parked,
 }: {
   role: Role
   company: Company | undefined
   statusName: string
+  parked: boolean
 }) {
   return (
     <section aria-label="Role fields" className="detail-fields">
@@ -35,6 +37,12 @@ export function RoleFieldsView({
           )}
         </Field>
         <Field label="Status">{statusName}</Field>
+        {/* Kept after the Role moves on, so you can see why it was Parked. */}
+        {(parked || role.parkedReason !== null) && (
+          <Field label="Parked reason">
+            <MultilineText value={role.parkedReason} />
+          </Field>
+        )}
         <Field label="Location">{role.location}</Field>
         <Field label="Work arrangement">
           {role.workArrangement && workArrangementLabels[role.workArrangement]}
