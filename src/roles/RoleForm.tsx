@@ -1,12 +1,18 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import type {
+  Company,
   FitRating,
   Role,
   RoleFields,
   SalaryPeriod,
   WorkArrangement,
 } from '../data/dataLayer'
-import { salaryPeriodLabels, workArrangementLabels } from './format'
+import { FormRow } from '../components/FormRow'
+import {
+  companyNotDisclosed,
+  salaryPeriodLabels,
+  workArrangementLabels,
+} from './format'
 
 // Form inputs hold strings; empty strings become null on save.
 type FormValues = {
@@ -18,6 +24,7 @@ function toFormValues(role: Role): FormValues {
     value === null ? '' : String(value)
   return {
     title: role.title,
+    companyId: text(role.companyId),
     location: text(role.location),
     workArrangement: text(role.workArrangement),
     salaryMin: text(role.salaryMin),
@@ -45,6 +52,7 @@ function toRoleFields(values: FormValues): RoleFields {
   const number = (value: string) => (value.trim() === '' ? null : Number(value))
   return {
     title: values.title,
+    companyId: text(values.companyId),
     location: text(values.location),
     workArrangement: text(values.workArrangement) as WorkArrangement | null,
     salaryMin: number(values.salaryMin),
@@ -68,36 +76,14 @@ function toRoleFields(values: FormValues): RoleFields {
   }
 }
 
-function Row({
-  id,
-  label,
-  hint,
-  children,
-}: {
-  id: string
-  label: string
-  hint?: string
-  children: ReactNode
-}) {
-  return (
-    <div className="form-row">
-      <label htmlFor={id}>{label}</label>
-      {children}
-      {hint && (
-        <span id={`${id}-hint`} className="hint">
-          {hint}
-        </span>
-      )}
-    </div>
-  )
-}
-
 export function RoleForm({
   role,
+  companies,
   onSave,
   onCancel,
 }: {
   role: Role
+  companies: Company[]
   onSave: (fields: RoleFields) => Promise<void>
   onCancel: () => void
 }) {
@@ -126,7 +112,7 @@ export function RoleForm({
     type = 'text',
     hint?: string,
   ) => (
-    <Row id={idFor(field)} label={label} hint={hint}>
+    <FormRow id={idFor(field)} label={label} hint={hint}>
       <input
         id={idFor(field)}
         type={type}
@@ -135,18 +121,18 @@ export function RoleForm({
         aria-describedby={hint && `${idFor(field)}-hint`}
         {...(type === 'number' ? { min: 0, step: 'any' } : {})}
       />
-    </Row>
+    </FormRow>
   )
 
   const textArea = (field: keyof FormValues, label: string) => (
-    <Row id={idFor(field)} label={label}>
+    <FormRow id={idFor(field)} label={label}>
       <textarea
         id={idFor(field)}
         rows={4}
         value={values[field] as string}
         onChange={(event) => set(field, event.target.value)}
       />
-    </Row>
+    </FormRow>
   )
 
   const select = (
@@ -155,7 +141,7 @@ export function RoleForm({
     emptyLabel: string,
     options: Array<[value: string, label: string]>,
   ) => (
-    <Row id={idFor(field)} label={label}>
+    <FormRow id={idFor(field)} label={label}>
       <select
         id={idFor(field)}
         value={values[field] as string}
@@ -168,11 +154,11 @@ export function RoleForm({
           </option>
         ))}
       </select>
-    </Row>
+    </FormRow>
   )
 
   return (
-    <form className="role-form" onSubmit={submit} aria-label="Edit Role">
+    <form className="edit-form" onSubmit={submit} aria-label="Edit Role">
       {error && (
         <p role="alert" className="form-error">
           {error}
@@ -180,14 +166,20 @@ export function RoleForm({
       )}
       <fieldset>
         <legend>Overview</legend>
-        <Row id={idFor('title')} label="Role title">
+        <FormRow id={idFor('title')} label="Role title">
           <input
             id={idFor('title')}
             required
             value={values.title}
             onChange={(event) => set('title', event.target.value)}
           />
-        </Row>
+        </FormRow>
+        {select(
+          'companyId',
+          'Company',
+          companyNotDisclosed,
+          companies.map((company) => [company.id, company.name]),
+        )}
         {textInput('location', 'Location')}
         {select(
           'workArrangement',

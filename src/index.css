@@ -55,9 +55,33 @@ body {
   background: var(--surface);
 }
 
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.5rem;
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 1.25rem;
+}
+
+.app-header nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.app-header nav a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.25rem 0;
+  border-bottom: 3px solid transparent;
+}
+
+.app-header nav a.active {
+  border-bottom-color: var(--accent);
 }
 
 main {
@@ -109,7 +133,7 @@ button {
   outline-offset: 2px;
 }
 
-.add-role {
+.add-form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -117,7 +141,7 @@ button {
   margin-bottom: 1.5rem;
 }
 
-.roles-list {
+.item-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -125,11 +149,19 @@ button {
   border-radius: 0.375rem;
 }
 
-.roles-list li {
+.item-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
   padding: 0.625rem 0.75rem;
 }
 
-.roles-list li + li {
+.secondary-text {
+  color: var(--muted);
+}
+
+.item-list li + li {
   border-top: 1px solid var(--border);
 }
 
@@ -220,14 +252,14 @@ button.danger {
 
 /* Role form */
 
-.role-form fieldset {
+.edit-form fieldset {
   margin: 0 0 1rem;
   padding: 0.75rem 1rem 1rem;
   border: 1px solid var(--border);
   border-radius: 0.375rem;
 }
 
-.role-form legend {
+.edit-form legend {
   padding: 0 0.25rem;
   font-weight: 600;
 }

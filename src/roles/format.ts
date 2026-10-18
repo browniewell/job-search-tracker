@@ -1,5 +1,8 @@
 import type { Role, SalaryPeriod, WorkArrangement } from '../data/dataLayer'
 
+/** Shown wherever a Role has no Company linked. */
+export const companyNotDisclosed = 'Company not disclosed'
+
 // Dates and money are shown US-style: the spec assumes USD.
 const locale = 'en-US'
 
@@ -60,14 +63,4 @@ export function formatCalendarDate(date: string): string {
 /** A clock timestamp, shown as its date in local time. */
 export function formatTimestampDate(timestamp: string): string {
   return mediumDate.format(new Date(timestamp))
-}
-
-/** Only http(s) links are rendered as links; anything else stays text. */
-export function safeHref(url: string): string | null {
-  try {
-    const { protocol } = new URL(url)
-    return protocol === 'http:' || protocol === 'https:' ? url : null
-  } catch {
-    return null
-  }
 }

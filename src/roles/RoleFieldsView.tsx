@@ -1,75 +1,49 @@
-import type { ReactNode } from 'react'
-import type { Role } from '../data/dataLayer'
 import {
+  ExternalLink,
+  Field,
+  FieldGroup,
+  MultilineText,
+} from '../components/Fields'
+import { Link } from 'react-router'
+import type { Company, Role } from '../data/dataLayer'
+import {
+  companyNotDisclosed,
   formatCalendarDate,
   formatPostedSalary,
   formatTimestampDate,
   formatYearlySalary,
-  safeHref,
   workArrangementLabels,
 } from './format'
 
-const notSet = <span className="not-set">Not set</span>
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="field">
-      <dt>{label}</dt>
-      {/* `value !== null && …` yields false for an empty field. */}
-      <dd>
-        {children === null || children === undefined || children === false
-          ? notSet
-          : children}
-      </dd>
-    </div>
-  )
-}
-
-function Text({ value }: { value: string | null }) {
-  return value === null ? notSet : <span className="multiline">{value}</span>
-}
-
-function ExternalLink({ url }: { url: string | null }) {
-  if (url === null) return notSet
-  const href = safeHref(url)
-  return href ? (
-    <a href={href} target="_blank" rel="noopener noreferrer">
-      {url}
-    </a>
-  ) : (
-    url
-  )
-}
-
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="field-group">
-      <h3>{title}</h3>
-      <dl>{children}</dl>
-    </section>
-  )
-}
-
 export function RoleFieldsView({
   role,
+  company,
   statusName,
 }: {
   role: Role
+  company: Company | undefined
   statusName: string
 }) {
   return (
-    <section aria-label="Role fields" className="role-fields">
-      <Group title="Overview">
+    <section aria-label="Role fields" className="detail-fields">
+      <FieldGroup title="Overview">
+        <Field label="Company">
+          {company ? (
+            <Link to={`/companies/${company.id}`}>{company.name}</Link>
+          ) : (
+            <span className="not-set">{companyNotDisclosed}</span>
+          )}
+        </Field>
         <Field label="Status">{statusName}</Field>
         <Field label="Location">{role.location}</Field>
         <Field label="Work arrangement">
           {role.workArrangement && workArrangementLabels[role.workArrangement]}
         </Field>
         <Field label="Role summary">
-          <Text value={role.roleSummary} />
+          <MultilineText value={role.roleSummary} />
         </Field>
-      </Group>
-      <Group title="Pay">
+      </FieldGroup>
+      <FieldGroup title="Pay">
         <Field label="Posted salary">{formatPostedSalary(role)}</Field>
         <Field label="Salary note">{role.salaryNote}</Field>
         <Field label="Expected salary">
@@ -80,8 +54,8 @@ export function RoleFieldsView({
           {role.minimumSalary !== null &&
             formatYearlySalary(role.minimumSalary)}
         </Field>
-      </Group>
-      <Group title="Posting">
+      </FieldGroup>
+      <FieldGroup title="Posting">
         <Field label="Posting link">
           <ExternalLink url={role.postingLink} />
         </Field>
@@ -99,33 +73,33 @@ export function RoleFieldsView({
                   Saved {formatTimestampDate(role.postingCopySavedAt)}
                 </span>
               )}
-              <Text value={role.postingCopy} />
+              <MultilineText value={role.postingCopy} />
             </>
           )}
         </Field>
-      </Group>
-      <Group title="Fit">
+      </FieldGroup>
+      <FieldGroup title="Fit">
         <Field label="Fit rating">
           {role.fitRating !== null && `${role.fitRating} of 5`}
         </Field>
         <Field label="Fit notes">
-          <Text value={role.fitNotes} />
+          <MultilineText value={role.fitNotes} />
         </Field>
         <Field label="Referral submitted">
           {role.referralSubmitted ? 'Yes' : 'No'}
         </Field>
-      </Group>
-      <Group title="Next action">
+      </FieldGroup>
+      <FieldGroup title="Next action">
         <Field label="Next action">{role.nextAction}</Field>
         <Field label="Next action date">
           {role.nextActionDate && formatCalendarDate(role.nextActionDate)}
         </Field>
-      </Group>
-      <Group title="Notes">
+      </FieldGroup>
+      <FieldGroup title="Notes">
         <Field label="Notes">
-          <Text value={role.notes} />
+          <MultilineText value={role.notes} />
         </Field>
-      </Group>
+      </FieldGroup>
     </section>
   )
 }
