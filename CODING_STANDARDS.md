@@ -14,6 +14,7 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 - **Empty values are `null`**, with every field present on every record. Booleans default to `false` and lists, such as Flags, to `[]`. Empty strings never stand in for "not set".
 - **Domain rules live in the data layer.** Validation and deletion rules (blank names, Fit rating range, a Company with Roles) are enforced in `src/data`. The UI may check first for a better flow, but it shows the data layer's own error message rather than writing its own.
 - **Time comes from the injected clock.** Timestamps are ISO strings from `clock()`. Calendar dates the user picks are `YYYY-MM-DD` strings.
+- **Order is chosen, never inherited.** Ids are random and IndexedDB returns records in id order, so anything listed, or picked from several candidates, sorts on a field set on purpose: a timestamp with a tiebreak such as a Status history entry's `sequence`, or a name. The fixed test clock makes ties common, so a test that passes only some of the time is the usual symptom.
 
 ## Tests
 
