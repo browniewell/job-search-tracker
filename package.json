@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "tsc -b && eslint ."
+    "check": "tsc -b && eslint . && prettier --check ."
   },
   "dependencies": {
     "dexie": "^4.4.6",
