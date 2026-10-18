@@ -95,7 +95,7 @@ describe('Company pages', () => {
     const user = userEvent.setup()
     render(<App data={data} />)
 
-    const roles = await screen.findByRole('list', { name: 'Roles' })
+    const roles = await screen.findByRole('table', { name: 'Roles' })
     expect(roles).toHaveTextContent('Company not disclosed')
     await user.click(
       within(roles).getByRole('link', { name: 'Senior QA Engineer' }),

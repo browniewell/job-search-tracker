@@ -385,3 +385,102 @@ button.danger {
   border: 1px solid var(--danger);
   border-radius: 0.375rem;
 }
+
+/* Roles table */
+
+.table-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  min-width: 0;
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+}
+
+.table-filters legend {
+  padding: 0 0.25rem;
+  font-weight: 600;
+}
+
+.table-filter {
+  display: flex;
+  flex: 1 1 9rem;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.table-filter input,
+.table-filter select {
+  width: 100%;
+  flex: none;
+}
+
+/* Nine columns don't fit a phone, or main's width: the table scrolls
+   sideways inside its own box instead of widening the page. */
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+}
+
+.roles-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.roles-table th,
+.roles-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.roles-table th {
+  padding: 0;
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.roles-table tbody tr {
+  border-top: 1px solid var(--border);
+}
+
+.sort-button {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+/* The arrow is decoration: aria-sort tells assistive technology. */
+.sort-button::after {
+  display: inline-block;
+  width: 1em;
+  margin-left: 0.25rem;
+  content: '';
+}
+
+th[aria-sort='ascending'] .sort-button::after {
+  content: '▲';
+  content: '▲' / '';
+}
+
+th[aria-sort='descending'] .sort-button::after {
+  content: '▼';
+  content: '▼' / '';
+}
+
+.roles-table td:first-child {
+  min-width: 10rem;
+}
+
+.roles-table .flag-badge {
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  min-width: 10rem;
+}
