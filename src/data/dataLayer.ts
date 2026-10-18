@@ -4,6 +4,9 @@ import Dexie, { type EntityTable, type Transaction } from 'dexie'
 
 export type Clock = () => Date
 
+/** Makes record ids. Random by default, so ids carry no order. */
+export type NewId = () => string
+
 export interface Status {
   id: string
   name: string
@@ -265,7 +268,9 @@ export interface DataLayer {
 export async function openDataLayer(options: {
   clock: Clock
   name?: string
+  newId?: NewId
 }): Promise<DataLayer> {
+  const newId = options.newId ?? (() => crypto.randomUUID())
   const db = new Dexie(options.name ?? 'job-search-tracker') as Database
   db.version(1).stores({
     statuses: 'id, order',
@@ -329,7 +334,7 @@ export async function openDataLayer(options: {
   db.on('populate', (tx) => {
     tx.table('statuses').bulkAdd(
       defaultStatuses.map((status, order) => ({
-        id: crypto.randomUUID(),
+        id: newId(),
         order,
         ...status,
       })),
@@ -363,7 +368,7 @@ export async function openDataLayer(options: {
           if (!initial) throw new Error('No Statuses configured')
           const now = options.clock().toISOString()
           const role: Role = {
-            id: crypto.randomUUID(),
+            id: newId(),
             ...emptyRole,
             title: requireTitle(title),
             statusId: initial.id,
@@ -371,7 +376,7 @@ export async function openDataLayer(options: {
           }
           await db.roles.add(role)
           await db.statusHistory.add({
-            id: crypto.randomUUID(),
+            id: newId(),
             roleId: role.id,
             fromStatusId: null,
             fromStatusName: null,
@@ -416,7 +421,7 @@ export async function openDataLayer(options: {
     createCompany: ({ name }) =>
       db.transaction('rw', db.companies, async () => {
         const company: Company = {
-          id: crypto.randomUUID(),
+          id: newId(),
           ...emptyCompany,
           name: requireCompanyName(name),
         }
@@ -472,7 +477,7 @@ export async function openDataLayer(options: {
           const updated: Role = { ...role, ...changes, statusId: to.id }
           await db.roles.put(updated)
           await db.statusHistory.add({
-            id: crypto.randomUUID(),
+            id: newId(),
             roleId,
             fromStatusId: role.statusId,
             fromStatusName: from?.name ?? null,
