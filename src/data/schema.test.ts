@@ -7,11 +7,16 @@ import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
 // ships with a new schema version, an upgrade and a test that opens the
 // previous version (CODING_STANDARDS.md). Add an entry for the new version;
 // an entry that has reached main stays as it is.
-// Status history entries are recorded from v5 on.
-const storedFields: Record<
-  number,
-  { role: string[]; company: string[]; statusHistoryEntry?: string[] }
-> = {
+// Every table is recorded from v5 on; v4 recorded Roles and Companies only.
+const entityByTable = {
+  roles: 'role',
+  companies: 'company',
+  statusHistory: 'statusHistoryEntry',
+  statuses: 'status',
+} as const
+type Entity = (typeof entityByTable)[keyof typeof entityByTable]
+
+const storedFields: Record<number, Partial<Record<Entity, string[]>>> = {
   4: {
     role: [
       'companyId',
@@ -83,29 +88,32 @@ const storedFields: Record<
       'toStatusId',
       'toStatusName',
     ],
+    status: ['closed', 'id', 'isApplied', 'name', 'order'],
   },
 }
 
 describe('Schema tripwire', () => {
-  it('Given the current schema version, then Roles, Companies and Status history entries are stored with exactly the fields recorded for that version', async () => {
+  it('Given the current schema version, then every table is stored with exactly the fields recorded for that version', async () => {
     const name = uniqueDatabaseName()
     const data = await openTestDataLayer({ name })
-    const created = await data.createRole({ title: 'Senior QA Engineer' })
-    const acme = await data.createCompany({ name: 'Acme' })
+    // One record in every table: Statuses are seeded, history comes with the Role.
+    await data.createRole({ title: 'Senior QA Engineer' })
+    await data.createCompany({ name: 'Acme' })
     const raw = await new Dexie(name).open()
     const version = raw.verno
+    const stored: Record<string, string[]> = {}
+    for (const table of raw.tables) {
+      const entity =
+        entityByTable[table.name as keyof typeof entityByTable] ?? table.name
+      const record = await table.toCollection().first()
+      stored[entity] = Object.keys(record ?? {}).sort()
+    }
     raw.close()
 
     expect(
       storedFields,
       `No stored fields recorded for schema v${version}`,
     ).toHaveProperty(String(version))
-    expect({
-      role: Object.keys((await data.getRole(created.id))!).sort(),
-      company: Object.keys((await data.getCompany(acme.id))!).sort(),
-      statusHistoryEntry: Object.keys(
-        (await data.getStatusHistory(created.id))[0],
-      ).sort(),
-    }).toEqual(storedFields[version])
+    expect(stored).toEqual(storedFields[version])
   })
 })
