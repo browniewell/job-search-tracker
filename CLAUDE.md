@@ -1,5 +1,9 @@
 # Job Search Tracker
 
+## Checks
+
+Wherever a skill says to typecheck, run `npm run check`: TypeScript plus ESLint, whose React rules catch what tsc misses (a component defined inside another, for one).
+
 ## Agent skills
 
 ### Issue tracker

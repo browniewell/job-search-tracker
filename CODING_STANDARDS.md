@@ -1,0 +1,29 @@
+# Coding standards
+
+Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002), Prettier, tsc and the schema tripwire in `src/data/schema.test.ts`. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
+
+## Stored data
+
+- **Schema changes.** A change to the fields a Role, Company or other stored entity is saved with ships with all of these:
+  - a new Dexie version with an upgrade that brings existing records to the new shape;
+  - a test that opens a database at the previous version and reads a record back;
+  - a new entry in the tripwire's `storedFields` for the new version.
+
+  An entry for a version that has reached main stays as it is: editing it in place, rather than adding a version, is a breach, because browsers already hold data in that shape.
+
+- **Empty values are `null`**, with every field present on every record. Booleans default to `false`. Empty strings never stand in for "not set".
+- **Domain rules live in the data layer.** Validation and deletion rules (blank names, Fit rating range, a Company with Roles) are enforced in `src/data`. The UI may check first for a better flow, but it shows the data layer's own error message rather than writing its own.
+- **Time comes from the injected clock.** Timestamps are ISO strings from `clock()`. Calendar dates the user picks are `YYYY-MM-DD` strings.
+
+## Tests
+
+- **Two seams only:** the data-layer interface, and the rendered `<App>` over the real data layer on fake-indexeddb. Playwright covers flows that need a real browser. Tests use our own modules for real, never mocked.
+- **Given/When/Then names in glossary terms**, stating behaviour a user would recognise.
+- **Red first.** A test that passed on its first run (a tripwire, an upgrade written before its test) is backed by a check: break the code, see the test fail, restore it. Note it in the PR's evidence.
+
+## UI
+
+- **Glossary terms in UI copy**, matching `GLOSSARY.md` exactly ("Role title", "Company not disclosed"). A new domain concept gets its glossary entry in the same PR; plain-English fields such as "industry" don't need one.
+- **Copy used in more than one place is one constant.**
+- **Shared building blocks live in `src/components`** (field lists, form rows, delete confirmation). Pages live under their area, such as `src/roles` or `src/companies`. A second page needing a piece is the cue to move it to `src/components`.
+- **Links from stored data render through `ExternalLink`**, which shows anything that isn't http(s) as text.
