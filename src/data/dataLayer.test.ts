@@ -52,6 +52,7 @@ describe('Roles', () => {
     expect(interested.name).toBe('Interested')
     expect(roles[0].statusId).toBe(interested.id)
   })
+
   it('Given the clock reads 14:30 UTC, when a Role is created, then its first Status history entry is from nothing to Interested at 14:30', async () => {
     const data = await openTestDataLayer({
       clock: () => new Date('2026-10-16T14:30:00.000Z'),
@@ -73,6 +74,7 @@ describe('Roles', () => {
       },
     ])
   })
+
   it('Given Roles created one after another, then they are listed in the order they were created', async () => {
     let now = new Date('2026-10-16T09:00:00.000Z')
     const data = await openTestDataLayer({ clock: () => now })
@@ -95,6 +97,7 @@ describe('Role fields', () => {
 
     expect(await data.getRole(created.id)).toMatchObject({
       title: 'Senior QA Engineer',
+      companyId: null,
       location: null,
       workArrangement: null,
       salaryMin: null,
@@ -117,6 +120,7 @@ describe('Role fields', () => {
       notes: null,
     })
   })
+
   it('Given a Role saved before Role fields existed (schema v1), when the database is opened, then the Role reads back with empty fields', async () => {
     const name = uniqueDatabaseName()
     // The walking skeleton's schema, as deployed to Pages.
@@ -144,6 +148,30 @@ describe('Role fields', () => {
       postingCopySavedAt: null,
       notes: null,
     })
+  })
+})
+
+describe('Schema v4', () => {
+  it('Given a Role saved before Companies existed (schema v3), when the database is opened, then the Role has no Company', async () => {
+    const name = uniqueDatabaseName()
+    const v3 = new Dexie(name)
+    v3.version(3).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt',
+      statusHistory: 'id, roleId',
+    })
+    await v3.table('roles').add({
+      id: 'role-1',
+      title: 'Senior QA Engineer',
+      statusId: 'status-1',
+      createdAt: '2026-10-16T14:30:00.000Z',
+    })
+    v3.close()
+
+    const data = await openTestDataLayer({ name })
+
+    expect((await data.getRole('role-1'))?.companyId).toBeNull()
+    expect(await data.listCompanies()).toEqual([])
   })
 })
 
@@ -203,6 +231,7 @@ describe('Editing a Role', () => {
       createdAt: role.createdAt,
     })
   })
+
   it('Given a Role, when a Posting copy is saved at 09:00 and other fields are edited at 10:00, then the Posting copy saved date stays 09:00', async () => {
     let now = new Date('2026-10-16T09:00:00.000Z')
     const data = await openTestDataLayer({ clock: () => now })
@@ -288,6 +317,7 @@ describe('Deleting a Role', () => {
     ])
     expect(await data.getStatusHistory(kept.id)).toHaveLength(1)
   })
+
   it('Given a Role saved with a Job summary (schema v2), when the database is opened, then it reads back as its Role summary', async () => {
     const name = uniqueDatabaseName()
     const v2 = new Dexie(name)
@@ -310,5 +340,156 @@ describe('Deleting a Role', () => {
     const role = await data.getRole('role-1')
     expect(role?.roleSummary).toBe('Own test strategy for the payments team')
     expect(role).not.toHaveProperty('jobSummary')
+  })
+})
+
+describe('Companies', () => {
+  it('Given Companies created with only a name, then the other fields are empty and they are listed by name, ignoring case', async () => {
+    const data = await openTestDataLayer()
+
+    const globex = await data.createCompany({ name: 'Globex' })
+    await data.createCompany({ name: 'acme' })
+    await data.createCompany({ name: 'Initech' })
+
+    expect(await data.getCompany(globex.id)).toEqual({
+      id: globex.id,
+      name: 'Globex',
+      industry: null,
+      summary: null,
+      website: null,
+      size: null,
+      notes: null,
+    })
+    expect((await data.listCompanies()).map((c) => c.name)).toEqual([
+      'acme',
+      'Globex',
+      'Initech',
+    ])
+  })
+
+  it('Given a blank name, when a Company is created or edited, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+    const acme = await data.createCompany({ name: 'Acme' })
+
+    await expect(data.createCompany({ name: '  ' })).rejects.toThrow(
+      'A Company needs a name',
+    )
+    await expect(data.updateCompany(acme.id, { name: '' })).rejects.toThrow(
+      'A Company needs a name',
+    )
+    expect((await data.listCompanies()).map((c) => c.name)).toEqual(['Acme'])
+  })
+
+  it('Given Acme, when another Company is created or renamed to the same name ignoring case, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+    await data.createCompany({ name: 'Acme' })
+    const globex = await data.createCompany({ name: 'Globex' })
+
+    for (const name of ['acme', '  ACME  ']) {
+      await expect(data.createCompany({ name })).rejects.toThrow(
+        'There is already a Company called Acme',
+      )
+    }
+    await expect(
+      data.updateCompany(globex.id, { name: 'acme' }),
+    ).rejects.toThrow('There is already a Company called Acme')
+
+    expect((await data.listCompanies()).map((c) => c.name)).toEqual([
+      'Acme',
+      'Globex',
+    ])
+  })
+
+  it('Given Acme, when Acme itself is renamed to ACME, then the rename is kept', async () => {
+    const data = await openTestDataLayer()
+    const acme = await data.createCompany({ name: 'Acme' })
+
+    await data.updateCompany(acme.id, { name: 'ACME' })
+
+    expect((await data.getCompany(acme.id))?.name).toBe('ACME')
+  })
+
+  it('Given a Company, when its fields are edited, then the edits are kept after the database is reopened', async () => {
+    const name = uniqueDatabaseName()
+    const first = await openTestDataLayer({ name })
+    const company = await first.createCompany({ name: 'Acme' })
+
+    await first.updateCompany(company.id, {
+      name: 'Acme Corp',
+      industry: 'Fintech',
+      summary: 'Payments for small businesses',
+      website: 'https://acme.example.com',
+      size: '51–200 (143 on LinkedIn)',
+      notes: 'Glassdoor reviews are mixed',
+    })
+    first.close()
+    const second = await openTestDataLayer({ name })
+
+    expect(await second.getCompany(company.id)).toEqual({
+      id: company.id,
+      name: 'Acme Corp',
+      industry: 'Fintech',
+      summary: 'Payments for small businesses',
+      website: 'https://acme.example.com',
+      size: '51–200 (143 on LinkedIn)',
+      notes: 'Glassdoor reviews are mixed',
+    })
+  })
+})
+
+describe('Linking a Role to a Company', () => {
+  it('Given a Role with no Company, when a Company is linked later, then the Company lists it; when unlinked, it no longer does', async () => {
+    const data = await openTestDataLayer()
+    const acme = await data.createCompany({ name: 'Acme' })
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    await data.createRole({ title: 'QA Engineer' })
+    expect(await data.listRolesAtCompany(acme.id)).toEqual([])
+
+    await data.updateRole(role.id, { companyId: acme.id })
+    expect(
+      (await data.listRolesAtCompany(acme.id)).map((r) => r.title),
+    ).toEqual(['Senior QA Engineer'])
+
+    await data.updateRole(role.id, { companyId: null })
+    expect(await data.listRolesAtCompany(acme.id)).toEqual([])
+    expect((await data.getRole(role.id))?.companyId).toBeNull()
+  })
+
+  it('Given no such Company, when a Role is linked to it, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+
+    await expect(
+      data.updateRole(role.id, { companyId: 'no-such-company' }),
+    ).rejects.toThrow('No Company with id no-such-company')
+    expect((await data.getRole(role.id))?.companyId).toBeNull()
+  })
+})
+
+describe('Deleting a Company', () => {
+  it('Given a Company with two Roles, when it is deleted, then it is blocked with an explanation and nothing changes', async () => {
+    const data = await openTestDataLayer()
+    const acme = await data.createCompany({ name: 'Acme' })
+    for (const title of ['QA Engineer', 'Senior QA Engineer']) {
+      const role = await data.createRole({ title })
+      await data.updateRole(role.id, { companyId: acme.id })
+    }
+
+    await expect(data.deleteCompany(acme.id)).rejects.toThrow(
+      'Acme still has 2 Roles. Link them to another Company or delete them first.',
+    )
+    expect(await data.getCompany(acme.id)).toBeDefined()
+    expect(await data.listRolesAtCompany(acme.id)).toHaveLength(2)
+  })
+
+  it('Given a Company with no Roles, when it is deleted, then it is gone', async () => {
+    const data = await openTestDataLayer()
+    const acme = await data.createCompany({ name: 'Acme' })
+    await data.createRole({ title: 'Senior QA Engineer' })
+
+    await data.deleteCompany(acme.id)
+
+    expect(await data.getCompany(acme.id)).toBeUndefined()
+    expect(await data.listRoles()).toHaveLength(1)
   })
 })

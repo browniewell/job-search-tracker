@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import type { Role, RoleFields, Status } from '../data/dataLayer'
+import type { Company, Role, RoleFields, Status } from '../data/dataLayer'
+import { ConfirmDelete } from '../components/ConfirmDelete'
 import { useDataLayer } from '../dataContext'
 import { RoleFieldsView } from './RoleFieldsView'
 import { RoleForm } from './RoleForm'
 
-type Loaded = { role: Role | undefined; statuses: Status[] }
+type Loaded = {
+  role: Role | undefined
+  statuses: Status[]
+  companies: Company[]
+}
 type Mode = 'view' | 'edit' | 'confirm-delete'
 
 export function RoleDetailPage() {
@@ -17,18 +22,20 @@ export function RoleDetailPage() {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([data.getRole(roleId), data.listStatuses()]).then(
-      ([role, statuses]) => {
-        if (!cancelled) setLoaded({ role, statuses })
-      },
-    )
+    Promise.all([
+      data.getRole(roleId),
+      data.listStatuses(),
+      data.listCompanies(),
+    ]).then(([role, statuses, companies]) => {
+      if (!cancelled) setLoaded({ role, statuses, companies })
+    })
     return () => {
       cancelled = true
     }
   }, [data, roleId])
 
   if (loaded === null) return null
-  const { role, statuses } = loaded
+  const { role, statuses, companies } = loaded
   const backLink = <Link to="/">← All Roles</Link>
   if (!role) {
     return (
@@ -44,7 +51,7 @@ export function RoleDetailPage() {
 
   async function save(fields: RoleFields) {
     const updated = await data.updateRole(roleId, fields)
-    setLoaded({ role: updated, statuses })
+    setLoaded({ role: updated, statuses, companies })
     setMode('view')
   }
 
@@ -58,7 +65,12 @@ export function RoleDetailPage() {
       {backLink}
       <h2 id="role-heading">{role.title}</h2>
       {mode === 'edit' ? (
-        <RoleForm role={role} onSave={save} onCancel={() => setMode('view')} />
+        <RoleForm
+          role={role}
+          companies={companies}
+          onSave={save}
+          onCancel={() => setMode('view')}
+        />
       ) : (
         <>
           <div className="page-actions">
@@ -75,59 +87,21 @@ export function RoleDetailPage() {
           </div>
           {mode === 'confirm-delete' && (
             <ConfirmDelete
-              title={role.title}
+              heading="Delete this Role?"
               onConfirm={deleteRole}
               onCancel={() => setMode('view')}
-            />
+            >
+              “{role.title}” and its Status history will be deleted. This can’t
+              be undone.
+            </ConfirmDelete>
           )}
-          <RoleFieldsView role={role} statusName={statusName} />
+          <RoleFieldsView
+            role={role}
+            company={companies.find((c) => c.id === role.companyId)}
+            statusName={statusName}
+          />
         </>
       )}
     </article>
-  )
-}
-
-function ConfirmDelete({
-  title,
-  onConfirm,
-  onCancel,
-}: {
-  title: string
-  onConfirm: () => void
-  onCancel: () => void
-}) {
-  const cancelRef = useRef<HTMLButtonElement>(null)
-
-  // Focus the safe choice so Enter doesn't delete by accident.
-  useEffect(() => cancelRef.current?.focus(), [])
-
-  return (
-    <div
-      role="alertdialog"
-      aria-labelledby="confirm-delete-heading"
-      aria-describedby="confirm-delete-description"
-      className="confirm"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') onCancel()
-      }}
-    >
-      <h3 id="confirm-delete-heading">Delete this Role?</h3>
-      <p id="confirm-delete-description">
-        “{title}” and its Status history will be deleted. This can’t be undone.
-      </p>
-      <div className="form-actions">
-        <button type="button" className="danger" onClick={onConfirm}>
-          Delete
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          ref={cancelRef}
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
   )
 }

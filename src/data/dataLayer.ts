@@ -1,6 +1,6 @@
 // The data layer (ADR-0002): the only module that touches Dexie. The UI reads
 // and writes through the domain operations on DataLayer, never through tables.
-import Dexie, { type EntityTable } from 'dexie'
+import Dexie, { type EntityTable, type Transaction } from 'dexie'
 
 export type Clock = () => Date
 
@@ -12,6 +12,29 @@ export interface Status {
   isApplied: boolean
 }
 
+/** The fields of a Company you can edit directly. Empty fields are null. */
+export interface CompanyFields {
+  name: string
+  industry: string | null
+  summary: string | null
+  website: string | null
+  /** Company size, free text, e.g. "51–200 (143 on LinkedIn)". */
+  size: string | null
+  notes: string | null
+}
+
+export interface Company extends CompanyFields {
+  id: string
+}
+
+const emptyCompany: Omit<CompanyFields, 'name'> = {
+  industry: null,
+  summary: null,
+  website: null,
+  size: null,
+  notes: null,
+}
+
 export type WorkArrangement = 'on-site' | 'hybrid' | 'remote'
 export type SalaryPeriod = 'annual' | 'hourly'
 export type FitRating = 1 | 2 | 3 | 4 | 5
@@ -19,6 +42,8 @@ export type FitRating = 1 | 2 | 3 | 4 | 5
 /** The fields of a Role you can edit directly. Empty fields are null. */
 export interface RoleFields {
   title: string
+  /** Optional: null while the Company isn't disclosed. */
+  companyId: string | null
   location: string | null
   workArrangement: WorkArrangement | null
   /** Posted salary range, in USD. */
@@ -56,6 +81,7 @@ export interface Role extends RoleFields {
 type EmptyRole = Omit<Role, 'id' | 'title' | 'statusId' | 'createdAt'>
 
 const emptyRole: EmptyRole = {
+  companyId: null,
   location: null,
   workArrangement: null,
   salaryMin: null,
@@ -111,6 +137,12 @@ function requireTitle(title: string): string {
   return trimmed
 }
 
+function requireCompanyName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('A Company needs a name')
+  return trimmed
+}
+
 function checkFitRating(fitRating: FitRating | null): void {
   if (
     fitRating !== null &&
@@ -120,10 +152,24 @@ function checkFitRating(fitRating: FitRating | null): void {
   }
 }
 
+/** Why a Company with Roles can't be deleted. */
+export function companyHasRolesMessage(
+  companyName: string,
+  roleCount: number,
+): string {
+  const [roles, them] =
+    roleCount === 1 ? ['1 Role', 'it'] : [`${roleCount} Roles`, 'them']
+  return `${companyName} still has ${roles}. Link ${them} to another Company or delete ${them} first.`
+}
+
+const byNameIgnoringCase = (a: { name: string }, b: { name: string }) =>
+  a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+
 type Database = Dexie & {
   statuses: EntityTable<Status, 'id'>
   roles: EntityTable<Role, 'id'>
   statusHistory: EntityTable<StatusHistoryEntry, 'id'>
+  companies: EntityTable<Company, 'id'>
 }
 
 export interface DataLayer {
@@ -134,6 +180,15 @@ export interface DataLayer {
   /** Deletes the Role and everything that belongs to it, in one transaction. */
   deleteRole(id: string): Promise<void>
   getStatusHistory(roleId: string): Promise<StatusHistoryEntry[]>
+  createCompany(input: { name: string }): Promise<Company>
+  /** Every Company, by name ignoring case. */
+  listCompanies(): Promise<Company[]>
+  getCompany(id: string): Promise<Company | undefined>
+  updateCompany(id: string, changes: Partial<CompanyFields>): Promise<Company>
+  /** Blocked while any Role is linked to the Company. */
+  deleteCompany(id: string): Promise<void>
+  /** The Roles linked to a Company, in the order they were created. */
+  listRolesAtCompany(companyId: string): Promise<Role[]>
   listStatuses(): Promise<Status[]>
   close(): void
 }
@@ -148,8 +203,8 @@ export async function openDataLayer(options: {
     roles: 'id, createdAt',
     statusHistory: 'id, roleId',
   })
-  // v2 adds all Role fields; Roles saved by v1 get them empty.
-  db.version(2).upgrade((tx) =>
+  // Roles saved before a field existed get it empty.
+  const fillMissingRoleFields = (tx: Transaction) =>
     tx
       .table('roles')
       .toCollection()
@@ -157,8 +212,9 @@ export async function openDataLayer(options: {
         for (const [field, empty] of Object.entries(emptyRole)) {
           if (!(field in role)) role[field] = empty
         }
-      }),
-  )
+      })
+  // v2 adds all Role fields.
+  db.version(2).upgrade(fillMissingRoleFields)
   // v3 renames Job summary to Role summary (GLOSSARY.md).
   db.version(3).upgrade((tx) =>
     tx
@@ -171,6 +227,10 @@ export async function openDataLayer(options: {
         }
       }),
   )
+  // v4 adds Companies and a Role's optional link to one.
+  db.version(4)
+    .stores({ companies: 'id', roles: 'id, createdAt, companyId' })
+    .upgrade(fillMissingRoleFields)
   db.on('populate', (tx) => {
     tx.table('statuses').bulkAdd(
       defaultStatuses.map((status, order) => ({
@@ -181,6 +241,19 @@ export async function openDataLayer(options: {
     )
   })
   await db.open()
+
+  // Each Company appears once: names are unique, ignoring case.
+  async function checkCompanyNameIsFree({ id, name }: Company) {
+    const lower = name.toLocaleLowerCase()
+    const taken = await db.companies
+      .filter(
+        (other) => other.id !== id && other.name.toLocaleLowerCase() === lower,
+      )
+      .first()
+    if (taken) {
+      throw new Error(`There is already a Company called ${taken.name}`)
+    }
+  }
 
   return {
     createRole: ({ title }) =>
@@ -218,12 +291,18 @@ export async function openDataLayer(options: {
     listRoles: () => db.roles.orderBy('createdAt').toArray(),
     getRole: (id) => db.roles.get(id),
     updateRole: (id, changes) =>
-      db.transaction('rw', db.roles, async () => {
+      db.transaction('rw', db.roles, db.companies, async () => {
         const role = await db.roles.get(id)
         if (!role) throw new Error(`No Role with id ${id}`)
         const updated: Role = { ...role, ...changes }
         updated.title = requireTitle(updated.title)
         checkFitRating(updated.fitRating)
+        if (
+          updated.companyId !== null &&
+          !(await db.companies.get(updated.companyId))
+        ) {
+          throw new Error(`No Company with id ${updated.companyId}`)
+        }
         // The saved date tracks the Posting copy text, not other edits.
         if (updated.postingCopy !== role.postingCopy) {
           updated.postingCopySavedAt =
@@ -236,6 +315,42 @@ export async function openDataLayer(options: {
       db.transaction('rw', db.roles, db.statusHistory, async () => {
         await db.statusHistory.where('roleId').equals(id).delete()
         await db.roles.delete(id)
+      }),
+    createCompany: ({ name }) =>
+      db.transaction('rw', db.companies, async () => {
+        const company: Company = {
+          id: crypto.randomUUID(),
+          ...emptyCompany,
+          name: requireCompanyName(name),
+        }
+        await checkCompanyNameIsFree(company)
+        await db.companies.add(company)
+        return company
+      }),
+    listCompanies: async () =>
+      (await db.companies.toArray()).sort(byNameIgnoringCase),
+    getCompany: (id) => db.companies.get(id),
+    deleteCompany: (id) =>
+      db.transaction('rw', db.companies, db.roles, async () => {
+        const company = await db.companies.get(id)
+        if (!company) return
+        const roleCount = await db.roles.where('companyId').equals(id).count()
+        if (roleCount > 0) {
+          throw new Error(companyHasRolesMessage(company.name, roleCount))
+        }
+        await db.companies.delete(id)
+      }),
+    listRolesAtCompany: (companyId) =>
+      db.roles.where('companyId').equals(companyId).sortBy('createdAt'),
+    updateCompany: (id, changes) =>
+      db.transaction('rw', db.companies, async () => {
+        const company = await db.companies.get(id)
+        if (!company) throw new Error(`No Company with id ${id}`)
+        const updated: Company = { ...company, ...changes }
+        updated.name = requireCompanyName(updated.name)
+        await checkCompanyNameIsFree(updated)
+        await db.companies.put(updated)
+        return updated
       }),
     getStatusHistory: (roleId) =>
       db.statusHistory.where('roleId').equals(roleId).sortBy('at'),
