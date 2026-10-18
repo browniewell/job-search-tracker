@@ -362,3 +362,60 @@ describe('Roles table rows', () => {
     ).toBeVisible()
   })
 })
+
+describe("Keeping the Roles table's filters and sort", () => {
+  async function filterAndSort() {
+    const user = userEvent.setup()
+    const table = await openWithFourRoles()
+    await user.type(screen.getByLabelText('Posting date from'), '2026-09-15')
+    const header = within(table).getByRole('columnheader', {
+      name: 'Posting date',
+    })
+    await user.click(within(header).getByRole('button'))
+    await user.click(within(header).getByRole('button'))
+    expect(titleOrder(table)).toEqual(['Bravo', 'Alpha'])
+    await user.click(within(table).getByRole('link', { name: 'Alpha' }))
+    await screen.findByRole('heading', { level: 2, name: 'Alpha' })
+    return user
+  }
+
+  async function expectFilteredAndSorted() {
+    const table = await rolesTable()
+    expect(titleOrder(table)).toEqual(['Bravo', 'Alpha'])
+    expect(screen.getByLabelText('Posting date from')).toHaveValue('2026-09-15')
+    expect(
+      within(table).getByRole('columnheader', { name: 'Posting date' }),
+    ).toHaveAttribute('aria-sort', 'descending')
+  }
+
+  it('Given I filter by Posting date and sort by Posting date, when I open a Role and go back, then the filter and sort are kept', async () => {
+    await filterAndSort()
+
+    window.history.back()
+
+    await expectFilteredAndSorted()
+  })
+
+  it('Given I filter by Posting date and sort by Posting date, when I open a Role and follow All Roles, then the filter and sort are kept', async () => {
+    const user = await filterAndSort()
+
+    await user.click(screen.getByRole('link', { name: '← All Roles' }))
+
+    await expectFilteredAndSorted()
+  })
+
+  it('Given I filter by Rejected and Acme, when I open a Role and go back, then the Status and Company filters are kept', async () => {
+    const user = userEvent.setup()
+    const table = await openWithFourRoles()
+    await user.selectOptions(screen.getByLabelText('Status'), 'Rejected')
+    await user.selectOptions(screen.getByLabelText('Company'), 'Acme')
+    await user.click(within(table).getByRole('link', { name: 'Charlie' }))
+    await screen.findByRole('heading', { level: 2, name: 'Charlie' })
+
+    window.history.back()
+
+    expect(titleOrder(await rolesTable())).toEqual(['Charlie'])
+    expect(screen.getByLabelText('Status')).toHaveDisplayValue('Rejected')
+    expect(screen.getByLabelText('Company')).toHaveDisplayValue('Acme')
+  })
+})

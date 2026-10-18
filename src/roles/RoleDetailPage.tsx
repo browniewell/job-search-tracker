@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import {
   flagsShownOnRole,
   parkedStatusName,
@@ -16,6 +16,7 @@ import { ChangeStatusForm } from './ChangeStatusForm'
 import { RoleFieldsView } from './RoleFieldsView'
 import { RoleForm } from './RoleForm'
 import { StatusTimeline } from './StatusTimeline'
+import { rolesListPath } from './rolesListLocation'
 
 type Loaded = {
   role: Role | undefined
@@ -29,6 +30,7 @@ type Mode = 'view' | 'edit' | 'confirm-delete'
 export function RoleDetailPage() {
   const data = useDataLayer()
   const navigate = useNavigate()
+  const rolesList = rolesListPath(useLocation().state)
   const { roleId = '' } = useParams()
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [mode, setMode] = useState<Mode>('view')
@@ -53,7 +55,7 @@ export function RoleDetailPage() {
 
   if (loaded === null) return null
   const { role, statuses, companies, history, flagSuggestions } = loaded
-  const backLink = <Link to="/">← All Roles</Link>
+  const backLink = <Link to={rolesList}>← All Roles</Link>
   if (!role) {
     return (
       <section>
@@ -95,7 +97,7 @@ export function RoleDetailPage() {
 
   async function deleteRole() {
     await data.deleteRole(roleId)
-    navigate('/')
+    navigate(rolesList)
   }
 
   return (

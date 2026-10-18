@@ -3,14 +3,17 @@ import {
   createColumnHelper,
   createFilteredRowModel,
   createSortedRowModel,
+  functionalUpdate,
   rowSortingFeature,
   sortFn_basic,
   sortFn_text,
   tableFeatures,
   useTable,
+  type ColumnFiltersState,
+  type SortingState,
 } from '@tanstack/react-table'
 import { useMemo } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation, useSearchParams } from 'react-router'
 import { FlagBadge } from '../components/FlagBadge'
 import {
   flagsShownOnRole,
@@ -26,6 +29,7 @@ import {
   formatPostedSalary,
   workArrangementLabels,
 } from './format'
+import { fromRolesList } from './rolesListLocation'
 
 /** A Role with what the table shows of its Company and Status. */
 interface RoleRow {
@@ -78,11 +82,7 @@ const columns = helper.columns([
     id: 'title',
     header: 'Role title',
     sortFn: 'text',
-    cell: ({ row }) => (
-      <Link to={`/roles/${row.original.role.id}`}>
-        {row.original.role.title}
-      </Link>
-    ),
+    cell: ({ row }) => <RoleTitleLink role={row.original.role} />,
   }),
   helper.accessor((row) => row.company?.name, {
     id: 'company',
@@ -171,6 +171,68 @@ const columns = helper.columns([
   }),
 ])
 
+// The table's filters and sort live in the URL's search, so going back to the
+// Roles list, or reloading it, shows it as it was left.
+const sortParam = 'sort'
+const selectFilterParams = ['status', 'company', 'workArrangement']
+const postingDateParams = { from: 'postingDateFrom', to: 'postingDateTo' }
+const columnIds = new Set(columns.map((column) => column.id))
+
+/** Sorts as `sort=postingDate.desc`, one parameter per column, in order. */
+function sortingFromSearch(search: URLSearchParams): SortingState {
+  return search.getAll(sortParam).flatMap((value) => {
+    const [id, direction] = value.split('.')
+    return columnIds.has(id) && (direction === 'asc' || direction === 'desc')
+      ? [{ id, desc: direction === 'desc' }]
+      : []
+  })
+}
+
+function filtersFromSearch(search: URLSearchParams): ColumnFiltersState {
+  const filters: ColumnFiltersState = selectFilterParams.flatMap((id) => {
+    const value = search.get(id)
+    return value ? [{ id, value }] : []
+  })
+  const range: DateRange = {
+    from: search.get(postingDateParams.from) || null,
+    to: search.get(postingDateParams.to) || null,
+  }
+  if (range.from !== null || range.to !== null) {
+    filters.push({ id: 'postingDate', value: range })
+  }
+  return filters
+}
+
+function searchFromView(
+  sorting: SortingState,
+  filters: ColumnFiltersState,
+): URLSearchParams {
+  const search = new URLSearchParams()
+  for (const filter of filters) {
+    if (filter.id === 'postingDate') {
+      const { from, to } = filter.value as DateRange
+      if (from !== null) search.set(postingDateParams.from, from)
+      if (to !== null) search.set(postingDateParams.to, to)
+    } else {
+      search.set(filter.id, filter.value as string)
+    }
+  }
+  for (const sort of sorting) {
+    search.append(sortParam, `${sort.id}.${sort.desc ? 'desc' : 'asc'}`)
+  }
+  return search
+}
+
+/** A row's link to its Role, remembering the list's filters and sort. */
+function RoleTitleLink({ role }: { role: Role }) {
+  const { search } = useLocation()
+  return (
+    <Link to={`/roles/${role.id}`} state={fromRolesList(search)}>
+      {role.title}
+    </Link>
+  )
+}
+
 const ariaSort = {
   asc: 'ascending',
   desc: 'descending',
@@ -205,6 +267,13 @@ export function RolesTable({
       }),
     [roles, companies, statuses],
   )
+  const [search, setSearch] = useSearchParams()
+  const sorting = useMemo(() => sortingFromSearch(search), [search])
+  const columnFilters = useMemo(() => filtersFromSearch(search), [search])
+  // Replacing, so Back leaves the list rather than undoing each change.
+  function setView(nextSorting: SortingState, nextFilters: ColumnFiltersState) {
+    setSearch(searchFromView(nextSorting, nextFilters), { replace: true })
+  }
   const table = useTable({
     features,
     columns,
@@ -212,6 +281,11 @@ export function RolesTable({
     getRowId: (row) => row.role.id,
     // Rather than descending first for any column of numbers.
     sortDescFirst: false,
+    state: { sorting, columnFilters },
+    onSortingChange: (updater) =>
+      setView(functionalUpdate(updater, sorting), columnFilters),
+    onColumnFiltersChange: (updater) =>
+      setView(sorting, functionalUpdate(updater, columnFilters)),
   })
 
   const statusColumn = table.getColumn('status')
