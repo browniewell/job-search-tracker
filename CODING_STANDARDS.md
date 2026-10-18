@@ -24,6 +24,6 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 ## UI
 
 - **Glossary terms in UI copy**, matching `GLOSSARY.md` exactly ("Role title", "Company not disclosed"). A new domain concept gets its glossary entry in the same PR; plain-English fields such as "industry" don't need one.
-- **Copy used in more than one place is one constant.**
+- **Copy used in more than one place is one constant.** Field labels are the exception: a field's edit form and its read-only view each write the label, and `GLOSSARY.md` keeps them in step.
 - **Shared building blocks live in `src/components`** (field lists, form rows, delete confirmation). Pages live under their area, such as `src/roles` or `src/companies`. A second page needing a piece is the cue to move it to `src/components`.
 - **Links from stored data render through `ExternalLink`**, which shows anything that isn't http(s) as text.
