@@ -11,6 +11,8 @@
   --accent-text: #ffffff;
   --danger: #b3261e;
   --danger-text: #ffffff;
+  --warning-bg: #fff4d6;
+  --warning-border: #8a5a00;
 
   font-family:
     system-ui,
@@ -33,6 +35,8 @@
     --accent-text: #0d1420;
     --danger: #ffb4ab;
     --danger-text: #2d0a07;
+    --warning-bg: #33290f;
+    --warning-border: #e0b44a;
   }
 }
 
@@ -246,6 +250,69 @@ button.danger {
 
 .status-timeline time {
   color: var(--muted);
+}
+
+.flag-badge {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin: 0.5rem 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--warning-border);
+  border-left-width: 4px;
+  border-radius: 0.375rem;
+  background: var(--warning-bg);
+}
+
+.flag-badge ul,
+.flag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flag-from {
+  color: var(--muted);
+}
+
+.flag-chips {
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.flag-chips li {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-left: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.flag-chips button {
+  padding: 0 0.5rem;
+  border: none;
+  background: none;
+}
+
+.flag-add {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.form-row .flag-add input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+.flag-add button {
+  flex: none;
+  white-space: nowrap;
 }
 
 .saved-date {

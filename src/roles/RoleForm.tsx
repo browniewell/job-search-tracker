@@ -7,6 +7,7 @@ import type {
   SalaryPeriod,
   WorkArrangement,
 } from '../data/dataLayer'
+import { FlagsInput } from '../components/FlagsInput'
 import { FormRow } from '../components/FormRow'
 import {
   companyNotDisclosed,
@@ -14,9 +15,12 @@ import {
   workArrangementLabels,
 } from './format'
 
-// Form inputs hold strings; empty strings become null on save.
+// Text inputs hold strings, which become null on save when empty; booleans
+// and Flags are held as they are.
 type FormValues = {
-  [K in keyof RoleFields]: RoleFields[K] extends boolean ? boolean : string
+  [K in keyof RoleFields]: RoleFields[K] extends boolean | string[]
+    ? RoleFields[K]
+    : string
 }
 
 function toFormValues(role: Role): FormValues {
@@ -41,6 +45,7 @@ function toFormValues(role: Role): FormValues {
     fitNotes: text(role.fitNotes),
     fitRating: text(role.fitRating),
     referralSubmitted: role.referralSubmitted,
+    flags: role.flags,
     nextAction: text(role.nextAction),
     nextActionDate: text(role.nextActionDate),
     parkedReason: text(role.parkedReason),
@@ -71,6 +76,7 @@ function toRoleFields(values: FormValues): RoleFields {
     fitNotes: text(values.fitNotes),
     fitRating: number(values.fitRating) as FitRating | null,
     referralSubmitted: values.referralSubmitted,
+    flags: values.flags,
     nextAction: text(values.nextAction),
     nextActionDate: text(values.nextActionDate),
     parkedReason: text(values.parkedReason),
@@ -81,11 +87,13 @@ function toRoleFields(values: FormValues): RoleFields {
 export function RoleForm({
   role,
   companies,
+  flagSuggestions,
   onSave,
   onCancel,
 }: {
   role: Role
   companies: Company[]
+  flagSuggestions: string[]
   onSave: (fields: RoleFields) => Promise<void>
   onCancel: () => void
 }) {
@@ -243,6 +251,12 @@ export function RoleForm({
           <label htmlFor={idFor('referralSubmitted')}>Referral submitted</label>
         </div>
       </fieldset>
+      <FlagsInput
+        flags={values.flags}
+        suggestions={flagSuggestions}
+        hint="Process concerns, e.g. Workday portal."
+        onChange={(flags) => set('flags', flags)}
+      />
       <fieldset>
         <legend>Next action</legend>
         {textInput('nextAction', 'Next action')}

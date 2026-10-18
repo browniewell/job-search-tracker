@@ -1,8 +1,13 @@
 import { useId, useState, type FormEvent } from 'react'
+import { FlagsInput } from '../components/FlagsInput'
 import { FormRow } from '../components/FormRow'
 import type { Company, CompanyFields } from '../data/dataLayer'
 
-type FormValues = Record<keyof CompanyFields, string>
+type FormValues = {
+  [K in keyof CompanyFields]: CompanyFields[K] extends string[]
+    ? string[]
+    : string
+}
 
 function toFormValues(company: Company): FormValues {
   const text = (value: string | null) => value ?? ''
@@ -12,6 +17,7 @@ function toFormValues(company: Company): FormValues {
     summary: text(company.summary),
     website: text(company.website),
     size: text(company.size),
+    flags: company.flags,
     notes: text(company.notes),
   }
 }
@@ -24,25 +30,29 @@ function toCompanyFields(values: FormValues): CompanyFields {
     summary: text(values.summary),
     website: text(values.website),
     size: text(values.size),
+    flags: values.flags,
     notes: text(values.notes),
   }
 }
 
 export function CompanyForm({
   company,
+  flagSuggestions,
   onSave,
   onCancel,
 }: {
   company: Company
+  flagSuggestions: string[]
   onSave: (fields: CompanyFields) => Promise<void>
   onCancel: () => void
 }) {
   const [values, setValues] = useState(() => toFormValues(company))
   const [error, setError] = useState<string | null>(null)
   const idPrefix = useId()
-  const idFor = (field: keyof FormValues) => `${idPrefix}-${field}`
+  type TextField = Exclude<keyof FormValues, 'flags'>
+  const idFor = (field: TextField) => `${idPrefix}-${field}`
 
-  function set(field: keyof FormValues, value: string) {
+  function set<K extends keyof FormValues>(field: K, value: FormValues[K]) {
     setValues((current) => ({ ...current, [field]: value }))
   }
 
@@ -56,7 +66,7 @@ export function CompanyForm({
   }
 
   const textInput = (
-    field: keyof FormValues,
+    field: TextField,
     label: string,
     type = 'text',
     hint?: string,
@@ -73,7 +83,7 @@ export function CompanyForm({
     </FormRow>
   )
 
-  const textArea = (field: keyof FormValues, label: string) => (
+  const textArea = (field: TextField, label: string) => (
     <FormRow id={idFor(field)} label={label}>
       <textarea
         id={idFor(field)}
@@ -105,6 +115,12 @@ export function CompanyForm({
         )}
         {textArea('notes', 'Notes')}
       </fieldset>
+      <FlagsInput
+        flags={values.flags}
+        suggestions={flagSuggestions}
+        hint="Dealbreakers, e.g. data monetization. Shown on every Role here."
+        onChange={(flags) => set('flags', flags)}
+      />
       <div className="form-actions">
         <button type="submit">Save</button>
         <button type="button" className="secondary" onClick={onCancel}>

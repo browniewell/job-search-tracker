@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
+  flagsShownOnRole,
   parkedStatusName,
   type Company,
   type Role,
@@ -9,6 +10,7 @@ import {
   type StatusHistoryEntry,
 } from '../data/dataLayer'
 import { ConfirmDelete } from '../components/ConfirmDelete'
+import { FlagBadge } from '../components/FlagBadge'
 import { useDataLayer } from '../dataContext'
 import { ChangeStatusForm } from './ChangeStatusForm'
 import { RoleFieldsView } from './RoleFieldsView'
@@ -20,6 +22,7 @@ type Loaded = {
   statuses: Status[]
   companies: Company[]
   history: StatusHistoryEntry[]
+  flagSuggestions: string[]
 }
 type Mode = 'view' | 'edit' | 'confirm-delete'
 
@@ -37,8 +40,11 @@ export function RoleDetailPage() {
       data.listStatuses(),
       data.listCompanies(),
       data.getStatusHistory(roleId),
-    ]).then(([role, statuses, companies, history]) => {
-      if (!cancelled) setLoaded({ role, statuses, companies, history })
+      data.listFlagSuggestions(),
+    ]).then(([role, statuses, companies, history, flagSuggestions]) => {
+      if (!cancelled) {
+        setLoaded({ role, statuses, companies, history, flagSuggestions })
+      }
     })
     return () => {
       cancelled = true
@@ -46,7 +52,7 @@ export function RoleDetailPage() {
   }, [data, roleId])
 
   if (loaded === null) return null
-  const { role, statuses, companies, history } = loaded
+  const { role, statuses, companies, history, flagSuggestions } = loaded
   const backLink = <Link to="/">← All Roles</Link>
   if (!role) {
     return (
@@ -59,10 +65,17 @@ export function RoleDetailPage() {
   }
   const statusName =
     statuses.find((status) => status.id === role.statusId)?.name ?? 'Unknown'
+  const company = companies.find((c) => c.id === role.companyId)
 
   async function save(fields: RoleFields) {
     const updated = await data.updateRole(roleId, fields)
-    setLoaded({ role: updated, statuses, companies, history })
+    setLoaded({
+      role: updated,
+      statuses,
+      companies,
+      history,
+      flagSuggestions: await data.listFlagSuggestions(),
+    })
     setMode('view')
   }
 
@@ -76,6 +89,7 @@ export function RoleDetailPage() {
       statuses,
       companies,
       history: await data.getStatusHistory(roleId),
+      flagSuggestions,
     })
   }
 
@@ -88,10 +102,12 @@ export function RoleDetailPage() {
     <article aria-labelledby="role-heading">
       {backLink}
       <h2 id="role-heading">{role.title}</h2>
+      <FlagBadge flags={flagsShownOnRole(role, company)} />
       {mode === 'edit' ? (
         <RoleForm
           role={role}
           companies={companies}
+          flagSuggestions={flagSuggestions}
           onSave={save}
           onCancel={() => setMode('view')}
         />
@@ -127,7 +143,7 @@ export function RoleDetailPage() {
           />
           <RoleFieldsView
             role={role}
-            company={companies.find((c) => c.id === role.companyId)}
+            company={company}
             statusName={statusName}
             parked={statusName === parkedStatusName}
           />

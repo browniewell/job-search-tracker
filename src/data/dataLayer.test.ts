@@ -231,6 +231,32 @@ describe('Schema v5', () => {
   })
 })
 
+describe('Schema v6', () => {
+  it('Given a Role and Company saved before Flags existed (schema v5), when the database is opened, then neither has any Flags', async () => {
+    const name = uniqueDatabaseName()
+    const v5 = new Dexie(name)
+    v5.version(5).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt, companyId',
+      statusHistory: 'id, roleId',
+      companies: 'id',
+    })
+    await v5.table('roles').add({
+      id: 'role-1',
+      title: 'Senior QA Engineer',
+      statusId: 'status-1',
+      createdAt: '2026-10-16T14:30:00.000Z',
+    })
+    await v5.table('companies').add({ id: 'company-1', name: 'Acme' })
+    v5.close()
+
+    const data = await openTestDataLayer({ name })
+
+    expect((await data.getRole('role-1'))?.flags).toEqual([])
+    expect((await data.getCompany('company-1'))?.flags).toEqual([])
+  })
+})
+
 describe('Editing a Role', () => {
   it('Given a Role, when its fields are edited, then the edits are kept after the database is reopened', async () => {
     const name = uniqueDatabaseName()
@@ -573,6 +599,7 @@ describe('Companies', () => {
       summary: null,
       website: null,
       size: null,
+      flags: [],
       notes: null,
     })
     expect((await data.listCompanies()).map((c) => c.name)).toEqual([
@@ -635,6 +662,7 @@ describe('Companies', () => {
       summary: 'Payments for small businesses',
       website: 'https://acme.example.com',
       size: '51–200 (143 on LinkedIn)',
+      flags: ['data monetization'],
       notes: 'Glassdoor reviews are mixed',
     })
     first.close()
@@ -647,6 +675,7 @@ describe('Companies', () => {
       summary: 'Payments for small businesses',
       website: 'https://acme.example.com',
       size: '51–200 (143 on LinkedIn)',
+      flags: ['data monetization'],
       notes: 'Glassdoor reviews are mixed',
     })
   })
@@ -678,6 +707,53 @@ describe('Linking a Role to a Company', () => {
       data.updateRole(role.id, { companyId: 'no-such-company' }),
     ).rejects.toThrow('No Company with id no-such-company')
     expect((await data.getRole(role.id))?.companyId).toBeNull()
+  })
+})
+
+describe('Flags', () => {
+  it('Given a new Role and Company with no Flags, when Flags are saved with stray spaces, blanks and repeats ignoring case, then each Flag is kept once as first written', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const acme = await data.createCompany({ name: 'Acme' })
+    expect(role.flags).toEqual([])
+    expect(acme.flags).toEqual([])
+
+    await data.updateRole(role.id, {
+      flags: [' Workday portal ', '', 'workday PORTAL', 'Unpaid take-home'],
+    })
+    await data.updateCompany(acme.id, {
+      flags: ['data monetization', '  ', 'Data monetization'],
+    })
+
+    expect((await data.getRole(role.id))?.flags).toEqual([
+      'Workday portal',
+      'Unpaid take-home',
+    ])
+    expect((await data.getCompany(acme.id))?.flags).toEqual([
+      'data monetization',
+    ])
+  })
+
+  it('Given Flags used on two Roles and a Company, then the Flag suggestions are every Flag used, each once ignoring case, by name ignoring case', async () => {
+    // Which spelling of a repeated Flag is suggested must not depend on
+    // the order Roles load in, which follows their random ids.
+    const data = await openTestDataLayer()
+    expect(await data.listFlagSuggestions()).toEqual([])
+    const first = await data.createRole({ title: 'QA Engineer' })
+    const second = await data.createRole({ title: 'Senior QA Engineer' })
+    const acme = await data.createCompany({ name: 'Acme' })
+
+    await data.updateRole(first.id, { flags: ['Workday portal'] })
+    await data.updateRole(second.id, {
+      flags: ['workday portal', 'Unpaid take-home'],
+    })
+    await data.updateCompany(acme.id, { flags: ['data monetization'] })
+
+    expect(await data.listFlagSuggestions()).toEqual([
+      'data monetization',
+      'Unpaid take-home',
+      'Workday portal',
+    ])
   })
 })
 

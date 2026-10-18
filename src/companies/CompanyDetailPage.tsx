@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ConfirmDelete } from '../components/ConfirmDelete'
+import { FlagBadge } from '../components/FlagBadge'
 import {
   ExternalLink,
   Field,
@@ -16,7 +17,11 @@ import {
 import { useDataLayer } from '../dataContext'
 import { CompanyForm } from './CompanyForm'
 
-type Loaded = { company: Company | undefined; roles: Role[] }
+type Loaded = {
+  company: Company | undefined
+  roles: Role[]
+  flagSuggestions: string[]
+}
 type Mode = 'view' | 'edit' | 'confirm-delete'
 
 export function CompanyDetailPage() {
@@ -32,8 +37,9 @@ export function CompanyDetailPage() {
     Promise.all([
       data.getCompany(companyId),
       data.listRolesAtCompany(companyId),
-    ]).then(([company, roles]) => {
-      if (!cancelled) setLoaded({ company, roles })
+      data.listFlagSuggestions(),
+    ]).then(([company, roles, flagSuggestions]) => {
+      if (!cancelled) setLoaded({ company, roles, flagSuggestions })
     })
     return () => {
       cancelled = true
@@ -41,7 +47,7 @@ export function CompanyDetailPage() {
   }, [data, companyId])
 
   if (loaded === null) return null
-  const { company, roles } = loaded
+  const { company, roles, flagSuggestions } = loaded
   const backLink = <Link to="/companies">← All Companies</Link>
   if (!company) {
     return (
@@ -55,7 +61,11 @@ export function CompanyDetailPage() {
 
   async function save(fields: CompanyFields) {
     const updated = await data.updateCompany(companyId, fields)
-    setLoaded({ company: updated, roles })
+    setLoaded({
+      company: updated,
+      roles,
+      flagSuggestions: await data.listFlagSuggestions(),
+    })
     setMode('view')
   }
 
@@ -82,9 +92,11 @@ export function CompanyDetailPage() {
     <article aria-labelledby="company-heading">
       {backLink}
       <h2 id="company-heading">{company.name}</h2>
+      <FlagBadge flags={company.flags.map((flag) => ({ flag }))} />
       {mode === 'edit' ? (
         <CompanyForm
           company={company}
+          flagSuggestions={flagSuggestions}
           onSave={save}
           onCancel={() => setMode('view')}
         />
