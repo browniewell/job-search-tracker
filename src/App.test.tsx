@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { App } from './App'
 import { openTestDataLayer, uniqueDatabaseName } from './test/dataLayers'
 
-describe('Roles list', () => {
-  it('Given no Roles, when I add a Role by title, then it appears in the Roles list', async () => {
+describe('Roles table', () => {
+  it('Given no Roles, when I add a Role by title, then it appears in the Roles table', async () => {
     const user = userEvent.setup()
     render(<App data={await openTestDataLayer()} />)
 
@@ -13,7 +13,7 @@ describe('Roles list', () => {
     await user.type(screen.getByLabelText('Role title'), 'Senior QA Engineer')
     await user.click(screen.getByRole('button', { name: 'Add Role' }))
 
-    const list = await screen.findByRole('list', { name: 'Roles' })
+    const list = await screen.findByRole('table', { name: 'Roles' })
     expect(list).toHaveTextContent('Senior QA Engineer')
     expect(screen.getByLabelText('Role title')).toHaveValue('')
   })
@@ -27,13 +27,13 @@ describe('Roles list', () => {
       'Senior QA Engineer',
     )
     await user.click(screen.getByRole('button', { name: 'Add Role' }))
-    await screen.findByRole('list', { name: 'Roles' })
+    await screen.findByRole('table', { name: 'Roles' })
     first.unmount()
 
     render(<App data={await openTestDataLayer({ name })} />)
 
     expect(
-      await screen.findByRole('list', { name: 'Roles' }),
+      await screen.findByRole('table', { name: 'Roles' }),
     ).toHaveTextContent('Senior QA Engineer')
   })
 
@@ -45,7 +45,7 @@ describe('Roles list', () => {
     await user.click(screen.getByRole('button', { name: 'Add Role' }))
 
     expect(
-      screen.queryByRole('list', { name: 'Roles' }),
+      screen.queryByRole('table', { name: 'Roles' }),
     ).not.toBeInTheDocument()
     expect(screen.getByText(/no roles yet/i)).toBeInTheDocument()
   })

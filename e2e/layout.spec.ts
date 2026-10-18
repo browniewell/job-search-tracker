@@ -29,7 +29,7 @@ for (const [device, viewport] of [
   ['phone', { width: 375, height: 812 }],
   ['desktop', { width: 1280, height: 800 }],
 ] as const) {
-  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each, then nothing spills out of its container`, async ({
+  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each and list Roles, then nothing spills out of its container`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport)
@@ -57,5 +57,9 @@ for (const [device, viewport] of [
     await page.getByRole('button', { name: 'Save' }).click()
     await expect(page.getByRole('note', { name: 'Flags' })).toBeVisible()
     expect(await overflowing(page), 'Role page').toEqual([])
+
+    await page.goto('/')
+    await expect(page.getByRole('table', { name: 'Roles' })).toBeVisible()
+    expect(await overflowing(page), 'Roles table').toEqual([])
   })
 }

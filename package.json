@@ -16,6 +16,7 @@
     "check": "tsc -b && eslint . && prettier --check ."
   },
   "dependencies": {
+    "@tanstack/react-table": "^9.2.6",
     "dexie": "^4.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

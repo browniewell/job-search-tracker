@@ -1,24 +1,27 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
-import type { Company, Role } from '../data/dataLayer'
+import type { Company, Role, Status } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
-import { companyNotDisclosed } from './format'
+import { RolesTable } from './RolesTable'
 
 export function RolesPage() {
   const data = useDataLayer()
   const [roles, setRoles] = useState<Role[] | null>(null)
   const [companies, setCompanies] = useState<Company[]>([])
+  const [statuses, setStatuses] = useState<Status[]>([])
   const [title, setTitle] = useState('')
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([data.listRoles(), data.listCompanies()]).then(
-      ([loadedRoles, loadedCompanies]) => {
-        if (cancelled) return
-        setRoles(loadedRoles)
-        setCompanies(loadedCompanies)
-      },
-    )
+    Promise.all([
+      data.listRoles(),
+      data.listCompanies(),
+      data.listStatuses(),
+    ]).then(([loadedRoles, loadedCompanies, loadedStatuses]) => {
+      if (cancelled) return
+      setRoles(loadedRoles)
+      setCompanies(loadedCompanies)
+      setStatuses(loadedStatuses)
+    })
     return () => {
       cancelled = true
     }
@@ -49,17 +52,7 @@ export function RolesPage() {
       {roles === null ? null : roles.length === 0 ? (
         <p>No Roles yet. Add the first one above.</p>
       ) : (
-        <ul aria-label="Roles" className="item-list">
-          {roles.map((role) => (
-            <li key={role.id}>
-              <Link to={`/roles/${role.id}`}>{role.title}</Link>
-              <span className="secondary-text">
-                {companies.find((c) => c.id === role.companyId)?.name ??
-                  companyNotDisclosed}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <RolesTable roles={roles} companies={companies} statuses={statuses} />
       )}
     </section>
   )
