@@ -1,3 +1,4 @@
+import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
 // Elements that spill out of their container: a layout bug no unit test
@@ -22,6 +23,30 @@ async function overflowing(page: Page): Promise<string[]> {
   })
 }
 
+// Accessibility problems axe can see: missing labels, contrast, ARIA misuse.
+async function axeViolations(page: Page): Promise<string[]> {
+  const { violations } = await new AxeBuilder({ page })
+    .include('#root')
+    .analyze()
+  return violations.map(
+    ({ id, nodes }) =>
+      `${id}: ${nodes.map((node) => node.target.join(' ')).join(', ')}`,
+  )
+}
+
+/** Each page is checked for layout, and for accessibility in both themes. */
+async function checkPage(page: Page, name: string) {
+  expect(await overflowing(page), `${name} overflow`).toEqual([])
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme })
+    expect(
+      await axeViolations(page),
+      `${name} accessibility, ${colorScheme}`,
+    ).toEqual([])
+  }
+  await page.emulateMedia({ colorScheme: null })
+}
+
 for (const [device, viewport] of [
   // Font metrics differ by OS: the narrowest phone shows locally what CI's
   // wider fonts show at 375.
@@ -29,7 +54,7 @@ for (const [device, viewport] of [
   ['phone', { width: 375, height: 812 }],
   ['desktop', { width: 1280, height: 800 }],
 ] as const) {
-  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each and list Roles, then nothing spills out of its container`, async ({
+  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each and list Roles, then nothing spills out of its container and axe finds no accessibility problems`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport)
@@ -40,10 +65,10 @@ for (const [device, viewport] of [
     await page.getByRole('button', { name: 'Edit' }).click()
     await page.getByLabel('Add a Flag').fill('data monetization')
     await page.getByLabel('Add a Flag').press('Enter')
-    expect(await overflowing(page), 'Company edit form').toEqual([])
+    await checkPage(page, 'Company edit form')
     await page.getByRole('button', { name: 'Save' }).click()
     await expect(page.getByRole('note', { name: 'Flags' })).toBeVisible()
-    expect(await overflowing(page), 'Company page').toEqual([])
+    await checkPage(page, 'Company page')
 
     await page.goto('/')
     await page.getByLabel('Role title').fill('Senior QA Engineer')
@@ -53,13 +78,13 @@ for (const [device, viewport] of [
     await page.getByLabel('Company').selectOption({ label: 'Acme' })
     await page.getByLabel('Add a Flag').fill('Workday portal')
     await page.getByLabel('Add a Flag').press('Enter')
-    expect(await overflowing(page), 'Role edit form').toEqual([])
+    await checkPage(page, 'Role edit form')
     await page.getByRole('button', { name: 'Save' }).click()
     await expect(page.getByRole('note', { name: 'Flags' })).toBeVisible()
-    expect(await overflowing(page), 'Role page').toEqual([])
+    await checkPage(page, 'Role page')
 
     await page.goto('/')
     await expect(page.getByRole('table', { name: 'Roles' })).toBeVisible()
-    expect(await overflowing(page), 'Roles table').toEqual([])
+    await checkPage(page, 'Roles table')
   })
 }
