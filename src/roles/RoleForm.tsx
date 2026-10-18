@@ -43,6 +43,7 @@ function toFormValues(role: Role): FormValues {
     referralSubmitted: role.referralSubmitted,
     nextAction: text(role.nextAction),
     nextActionDate: text(role.nextActionDate),
+    parkedReason: text(role.parkedReason),
     notes: text(role.notes),
   }
 }
@@ -72,6 +73,7 @@ function toRoleFields(values: FormValues): RoleFields {
     referralSubmitted: values.referralSubmitted,
     nextAction: text(values.nextAction),
     nextActionDate: text(values.nextActionDate),
+    parkedReason: text(values.parkedReason),
     notes: text(values.notes),
   }
 }
@@ -188,6 +190,7 @@ export function RoleForm({
           Object.entries(workArrangementLabels),
         )}
         {textArea('roleSummary', 'Role summary')}
+        {textArea('parkedReason', 'Parked reason')}
       </fieldset>
       <fieldset>
         <legend>Pay (USD)</legend>

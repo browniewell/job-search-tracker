@@ -67,6 +67,8 @@ export interface RoleFields {
   nextAction: string | null
   /** Calendar date, YYYY-MM-DD. */
   nextActionDate: string | null
+  /** Why the Role was Parked; kept after it moves on. */
+  parkedReason: string | null
   notes: string | null
 }
 
@@ -100,6 +102,7 @@ const emptyRole: EmptyRole = {
   referralSubmitted: false,
   nextAction: null,
   nextActionDate: null,
+  parkedReason: null,
   notes: null,
   postingCopySavedAt: null,
 }
@@ -115,11 +118,19 @@ export interface StatusHistoryEntry {
   toStatusName: string
   at: string
   imported: boolean
+  /** Position in the Role's Status history, from 0: orders entries that share a timestamp. */
+  sequence: number
 }
+
+/**
+ * The Status whose Roles carry a Parked reason. Until Statuses can be
+ * configured, Parked is recognised by its default name.
+ */
+export const parkedStatusName = 'Parked'
 
 const defaultStatuses: Array<Pick<Status, 'name' | 'closed' | 'isApplied'>> = [
   { name: 'Interested', closed: false, isApplied: false },
-  { name: 'Parked', closed: false, isApplied: false },
+  { name: parkedStatusName, closed: false, isApplied: false },
   { name: 'Applied', closed: false, isApplied: true },
   { name: 'Recruiter Screen', closed: false, isApplied: false },
   { name: 'Interviewing', closed: false, isApplied: false },
@@ -179,6 +190,17 @@ export interface DataLayer {
   updateRole(id: string, changes: Partial<RoleFields>): Promise<Role>
   /** Deletes the Role and everything that belongs to it, in one transaction. */
   deleteRole(id: string): Promise<void>
+  /**
+   * Moves the Role to another Status and records the change in its Status
+   * history, in one transaction. Changing to the Status it is already in
+   * records nothing. A Parked reason given with the change is saved with it.
+   */
+  changeStatus(
+    roleId: string,
+    statusId: string,
+    changes?: Pick<Partial<RoleFields>, 'parkedReason'>,
+  ): Promise<Role>
+  /** A Role's Status history, starting with the first entry. Read-only. */
   getStatusHistory(roleId: string): Promise<StatusHistoryEntry[]>
   createCompany(input: { name: string }): Promise<Company>
   /** Every Company, by name ignoring case. */
@@ -231,6 +253,25 @@ export async function openDataLayer(options: {
   db.version(4)
     .stores({ companies: 'id', roles: 'id, createdAt, companyId' })
     .upgrade(fillMissingRoleFields)
+  // v5 adds the Parked reason, and numbers each Role's Status history
+  // entries oldest first so the timeline keeps its order when timestamps tie.
+  db.version(5).upgrade(async (tx) => {
+    await fillMissingRoleFields(tx)
+    const entries: StatusHistoryEntry[] = await tx
+      .table('statusHistory')
+      .toArray()
+    // On a tie, the Role's first entry (from no Status) comes first.
+    const oldestFirst = (a: StatusHistoryEntry, b: StatusHistoryEntry) =>
+      a.at.localeCompare(b.at) ||
+      Number(a.fromStatusId !== null) - Number(b.fromStatusId !== null)
+    const nextSequence = new Map<string, number>()
+    for (const entry of entries.sort(oldestFirst)) {
+      const sequence = nextSequence.get(entry.roleId) ?? 0
+      nextSequence.set(entry.roleId, sequence + 1)
+      entry.sequence = sequence
+    }
+    await tx.table('statusHistory').bulkPut(entries)
+  })
   db.on('populate', (tx) => {
     tx.table('statuses').bulkAdd(
       defaultStatuses.map((status, order) => ({
@@ -284,6 +325,7 @@ export async function openDataLayer(options: {
             toStatusName: initial.name,
             at: now,
             imported: false,
+            sequence: 0,
           })
           return role
         },
@@ -352,8 +394,43 @@ export async function openDataLayer(options: {
         await db.companies.put(updated)
         return updated
       }),
+    changeStatus: (roleId, statusId, changes = {}) =>
+      db.transaction(
+        'rw',
+        db.statuses,
+        db.roles,
+        db.statusHistory,
+        async () => {
+          const role = await db.roles.get(roleId)
+          if (!role) throw new Error(`No Role with id ${roleId}`)
+          const to = await db.statuses.get(statusId)
+          if (!to) throw new Error(`No Status with id ${statusId}`)
+          if (role.statusId === to.id) {
+            const updated: Role = { ...role, ...changes }
+            await db.roles.put(updated)
+            return updated
+          }
+          const history = db.statusHistory.where('roleId').equals(roleId)
+          const entryCount = await history.count()
+          const from = await db.statuses.get(role.statusId)
+          const updated: Role = { ...role, ...changes, statusId: to.id }
+          await db.roles.put(updated)
+          await db.statusHistory.add({
+            id: crypto.randomUUID(),
+            roleId,
+            fromStatusId: role.statusId,
+            fromStatusName: from?.name ?? null,
+            toStatusId: to.id,
+            toStatusName: to.name,
+            at: options.clock().toISOString(),
+            imported: false,
+            sequence: entryCount,
+          })
+          return updated
+        },
+      ),
     getStatusHistory: (roleId) =>
-      db.statusHistory.where('roleId').equals(roleId).sortBy('at'),
+      db.statusHistory.where('roleId').equals(roleId).sortBy('sequence'),
     listStatuses: () => db.statuses.orderBy('order').toArray(),
     close: () => db.close(),
   }

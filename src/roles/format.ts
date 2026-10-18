@@ -60,6 +60,16 @@ export function formatCalendarDate(date: string): string {
   return mediumDate.format(new Date(year, month - 1, day))
 }
 
+const mediumDateTime = new Intl.DateTimeFormat(locale, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
+
+/** A clock timestamp, shown as its date and time in local time. */
+export function formatTimestamp(timestamp: string): string {
+  return mediumDateTime.format(new Date(timestamp))
+}
+
 /** A clock timestamp, shown as its date in local time. */
 export function formatTimestampDate(timestamp: string): string {
   return mediumDate.format(new Date(timestamp))

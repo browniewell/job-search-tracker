@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { App } from '../App'
@@ -185,5 +185,83 @@ describe('Role detail page', () => {
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(await data.getRole(role.id)).toBeDefined()
+  })
+
+  it('Given a new Role created at 9:30, when I change its Status to Applied at 11:00, then the Role shows Applied and its Status history timeline starts with Interested', async () => {
+    let now = new Date('2026-10-16T14:30:00.000Z')
+    const data = await openTestDataLayer({ clock: () => now })
+    await data.createRole({ title: 'Senior QA Engineer' })
+    const { user } = await openRoleDetail(data, 'Senior QA Engineer')
+
+    now = new Date('2026-10-16T16:00:00.000Z')
+    const changeStatus = screen.getByRole('form', { name: 'Change Status' })
+    await user.selectOptions(
+      within(changeStatus).getByLabelText('Status'),
+      'Applied',
+    )
+    await user.click(
+      within(changeStatus).getByRole('button', { name: 'Change Status' }),
+    )
+
+    const timeline = await screen.findByRole('list', {
+      name: 'Status history',
+    })
+    await waitFor(() =>
+      expect(
+        within(timeline)
+          .getAllByRole('listitem')
+          // Intl puts a narrow no-break space before AM/PM.
+          .map((item) => item.textContent?.replace(/\s/g, ' ')),
+      ).toEqual([
+        'Interested · Oct 16, 2026, 9:30 AM',
+        'Interested → Applied · Oct 16, 2026, 11:00 AM',
+      ]),
+    )
+    expect(
+      within(screen.getByRole('region', { name: 'Role fields' })).getByText(
+        'Status',
+      ).nextSibling,
+    ).toHaveTextContent('Applied')
+  })
+
+  it('Given a Role in Interested, when I Park it with a Parked reason and later move it back to Interested, then the Parked reason is still shown', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const { user } = await openRoleDetail(data, 'Senior QA Engineer')
+    const changeStatusTo = async (name: string, parkedReason?: string) => {
+      const form = screen.getByRole('form', { name: 'Change Status' })
+      await user.selectOptions(within(form).getByLabelText('Status'), name)
+      if (parkedReason !== undefined) {
+        await user.type(
+          within(form).getByLabelText('Parked reason'),
+          parkedReason,
+        )
+      }
+      await user.click(
+        within(form).getByRole('button', { name: 'Change Status' }),
+      )
+      await waitFor(() => expectShown('Status', name))
+    }
+    const expectShown = (label: string, value: string) =>
+      expect(
+        within(screen.getByRole('region', { name: 'Role fields' })).getByText(
+          label,
+        ).nextSibling,
+      ).toHaveTextContent(value)
+    expect(screen.queryByText('Parked reason')).not.toBeInTheDocument()
+
+    await changeStatusTo('Parked', 'Hands-on expectation')
+    expectShown('Parked reason', 'Hands-on expectation')
+
+    await changeStatusTo('Interested')
+    expectShown('Parked reason', 'Hands-on expectation')
+    expect((await data.getRole(role.id))?.parkedReason).toBe(
+      'Hands-on expectation',
+    )
+    expect(
+      within(screen.getByRole('list', { name: 'Status history' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.split(' · ')[0]),
+    ).toEqual(['Interested', 'Interested → Parked', 'Parked → Interested'])
   })
 })

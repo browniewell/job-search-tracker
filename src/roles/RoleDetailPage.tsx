@@ -1,15 +1,25 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import type { Company, Role, RoleFields, Status } from '../data/dataLayer'
+import {
+  parkedStatusName,
+  type Company,
+  type Role,
+  type RoleFields,
+  type Status,
+  type StatusHistoryEntry,
+} from '../data/dataLayer'
 import { ConfirmDelete } from '../components/ConfirmDelete'
 import { useDataLayer } from '../dataContext'
+import { ChangeStatusForm } from './ChangeStatusForm'
 import { RoleFieldsView } from './RoleFieldsView'
 import { RoleForm } from './RoleForm'
+import { StatusTimeline } from './StatusTimeline'
 
 type Loaded = {
   role: Role | undefined
   statuses: Status[]
   companies: Company[]
+  history: StatusHistoryEntry[]
 }
 type Mode = 'view' | 'edit' | 'confirm-delete'
 
@@ -26,8 +36,9 @@ export function RoleDetailPage() {
       data.getRole(roleId),
       data.listStatuses(),
       data.listCompanies(),
-    ]).then(([role, statuses, companies]) => {
-      if (!cancelled) setLoaded({ role, statuses, companies })
+      data.getStatusHistory(roleId),
+    ]).then(([role, statuses, companies, history]) => {
+      if (!cancelled) setLoaded({ role, statuses, companies, history })
     })
     return () => {
       cancelled = true
@@ -35,7 +46,7 @@ export function RoleDetailPage() {
   }, [data, roleId])
 
   if (loaded === null) return null
-  const { role, statuses, companies } = loaded
+  const { role, statuses, companies, history } = loaded
   const backLink = <Link to="/">← All Roles</Link>
   if (!role) {
     return (
@@ -51,8 +62,21 @@ export function RoleDetailPage() {
 
   async function save(fields: RoleFields) {
     const updated = await data.updateRole(roleId, fields)
-    setLoaded({ role: updated, statuses, companies })
+    setLoaded({ role: updated, statuses, companies, history })
     setMode('view')
+  }
+
+  async function changeStatus(
+    statusId: string,
+    changes: Pick<Partial<Role>, 'parkedReason'>,
+  ) {
+    const updated = await data.changeStatus(roleId, statusId, changes)
+    setLoaded({
+      role: updated,
+      statuses,
+      companies,
+      history: await data.getStatusHistory(roleId),
+    })
   }
 
   async function deleteRole() {
@@ -95,11 +119,19 @@ export function RoleDetailPage() {
               be undone.
             </ConfirmDelete>
           )}
+          <ChangeStatusForm
+            key={role.statusId}
+            role={role}
+            statuses={statuses}
+            onChange={changeStatus}
+          />
           <RoleFieldsView
             role={role}
             company={companies.find((c) => c.id === role.companyId)}
             statusName={statusName}
+            parked={statusName === parkedStatusName}
           />
+          <StatusTimeline entries={history} />
         </>
       )}
     </article>

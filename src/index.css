@@ -231,6 +231,23 @@ button.danger {
   white-space: pre-wrap;
 }
 
+.change-status {
+  max-width: 32rem;
+}
+
+.status-timeline {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.status-timeline li {
+  padding: 0.25rem 0;
+}
+
+.status-timeline time {
+  color: var(--muted);
+}
+
 .saved-date {
   display: block;
   color: var(--muted);
