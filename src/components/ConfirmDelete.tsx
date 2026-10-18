@@ -18,6 +18,9 @@ export function ConfirmDelete({
   useEffect(() => cancelRef.current?.focus(), [])
 
   return (
+    // Escape closes a dialog (ARIA dialog pattern); the rule counts
+    // alertdialog as non-interactive.
+    // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions
     <div
       role="alertdialog"
       aria-labelledby="confirm-delete-heading"

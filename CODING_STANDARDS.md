@@ -1,6 +1,6 @@
 # Coding standards
 
-Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002), Prettier, tsc and the schema tripwire in `src/data/schema.test.ts`. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
+Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002, and JSX accessibility), Prettier, tsc, the schema tripwire in `src/data/schema.test.ts`, and `e2e/layout.spec.ts`, which checks every page for overflow and runs axe on it in both themes. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
 
 ## Stored data
 
