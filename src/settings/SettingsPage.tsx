@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ConfirmDelete } from '../components/ConfirmDelete'
 import { FormRow } from '../components/FormRow'
+import { StatusOptions } from '../components/StatusOptions'
 import {
   appliedStatusDeleteMessage,
   statusHasRolesMessage,
@@ -76,7 +77,9 @@ export function SettingsPage() {
 
   // Every change shows the data layer's own message if it is refused, then
   // the Statuses as they are now saved. Resolves to whether it was made.
-  async function change(operation: () => Promise<unknown>): Promise<boolean> {
+  async function saveAndReload(
+    operation: () => Promise<unknown>,
+  ): Promise<boolean> {
     let made = true
     try {
       await operation()
@@ -91,7 +94,7 @@ export function SettingsPage() {
 
   async function addStatus(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (await change(() => data.createStatus({ name: newName }))) {
+    if (await saveAndReload(() => data.createStatus({ name: newName }))) {
       setNewName('')
     }
   }
@@ -110,7 +113,7 @@ export function SettingsPage() {
   }
 
   async function deleteStatus(id: string) {
-    await change(() => data.deleteStatus(id))
+    await saveAndReload(() => data.deleteStatus(id))
     setDeletingId(null)
   }
 
@@ -142,14 +145,10 @@ export function SettingsPage() {
               aria-describedby="applied-status-hint"
               value={applied?.id}
               onChange={(event) =>
-                change(() => data.setAppliedStatus(event.target.value))
+                saveAndReload(() => data.setAppliedStatus(event.target.value))
               }
             >
-              {statuses.map((status) => (
-                <option key={status.id} value={status.id}>
-                  {status.name}
-                </option>
-              ))}
+              <StatusOptions statuses={statuses} />
             </select>
           </FormRow>
           <FormRow
@@ -162,7 +161,7 @@ export function SettingsPage() {
               aria-describedby="parked-status-hint"
               value={parked?.id ?? noParkedStatus}
               onChange={(event) =>
-                change(() =>
+                saveAndReload(() =>
                   data.setParkedStatus(
                     event.target.value === noParkedStatus
                       ? null
@@ -172,11 +171,7 @@ export function SettingsPage() {
               }
             >
               <option value={noParkedStatus}>None</option>
-              {statuses.map((status) => (
-                <option key={status.id} value={status.id}>
-                  {status.name}
-                </option>
-              ))}
+              <StatusOptions statuses={statuses} />
             </select>
           </FormRow>
         </div>
@@ -190,7 +185,7 @@ export function SettingsPage() {
                   checked={status.closed}
                   aria-label={`${status.name} is Closed`}
                   onChange={(event) =>
-                    change(() =>
+                    saveAndReload(() =>
                       data.updateStatus(status.id, {
                         closed: event.target.checked,
                       }),
@@ -206,7 +201,7 @@ export function SettingsPage() {
                   aria-label={`Move ${status.name} up`}
                   disabled={index === 0}
                   onClick={() =>
-                    change(() => data.moveStatus(status.id, index - 1))
+                    saveAndReload(() => data.moveStatus(status.id, index - 1))
                   }
                 >
                   ↑
@@ -217,7 +212,7 @@ export function SettingsPage() {
                   aria-label={`Move ${status.name} down`}
                   disabled={index === statuses.length - 1}
                   onClick={() =>
-                    change(() => data.moveStatus(status.id, index + 1))
+                    saveAndReload(() => data.moveStatus(status.id, index + 1))
                   }
                 >
                   ↓
@@ -254,7 +249,9 @@ export function SettingsPage() {
                   status={status}
                   onSave={async (name) => {
                     if (
-                      await change(() => data.updateStatus(status.id, { name }))
+                      await saveAndReload(() =>
+                        data.updateStatus(status.id, { name }),
+                      )
                     ) {
                       setRenamingId(null)
                     }

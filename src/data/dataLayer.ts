@@ -431,6 +431,18 @@ export async function openDataLayer(options: {
     }
   }
 
+  // Sets a flag on one Status, or none when null, and clears it on the rest.
+  function flagOnlyStatus(flag: 'isApplied' | 'isParked', id: string | null) {
+    return db.transaction('rw', db.statuses, async () => {
+      if (id !== null && !(await db.statuses.get(id))) {
+        throw new Error(`No Status with id ${id}`)
+      }
+      await db.statuses.toCollection().modify((status) => {
+        status[flag] = status.id === id
+      })
+    })
+  }
+
   return {
     createRole: ({ title }) =>
       db.transaction(
@@ -628,25 +640,9 @@ export async function openDataLayer(options: {
         await db.statuses.delete(id)
       }),
     // Exactly one Status is the Applied status at all times.
-    setAppliedStatus: (id) =>
-      db.transaction('rw', db.statuses, async () => {
-        if (!(await db.statuses.get(id))) {
-          throw new Error(`No Status with id ${id}`)
-        }
-        await db.statuses.toCollection().modify((status) => {
-          status.isApplied = status.id === id
-        })
-      }),
+    setAppliedStatus: (id) => flagOnlyStatus('isApplied', id),
     // At most one Status is the Parked status.
-    setParkedStatus: (id) =>
-      db.transaction('rw', db.statuses, async () => {
-        if (id !== null && !(await db.statuses.get(id))) {
-          throw new Error(`No Status with id ${id}`)
-        }
-        await db.statuses.toCollection().modify((status) => {
-          status.isParked = status.id === id
-        })
-      }),
+    setParkedStatus: (id) => flagOnlyStatus('isParked', id),
     listFlagSuggestions: () =>
       db.transaction('r', db.roles, db.companies, async () => {
         const used = [
