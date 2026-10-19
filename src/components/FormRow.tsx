@@ -9,7 +9,7 @@ export function FormRow({
 }: {
   id: string
   label: string
-  hint?: string
+  hint?: string | undefined
   children: ReactNode
 }) {
   return (

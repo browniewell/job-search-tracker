@@ -24,7 +24,10 @@ export default defineConfig([
     },
   },
   {
-    // ADR-0002: only the data layer may touch Dexie.
+    // ADR-0002: only the data layer may touch Dexie. And each area (src/roles,
+    // src/companies, …) imports only shared modules, never another area: a
+    // piece a second area needs moves to src/components or src/format.ts
+    // (CODING_STANDARDS.md). One rule entry, as a second would replace this one.
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/data/**'],
     rules: {
@@ -35,6 +38,17 @@ export default defineConfig([
             {
               group: ['dexie', 'dexie/*'],
               message: 'Only src/data may import Dexie (ADR-0002).',
+            },
+            {
+              group: [
+                '../roles/*',
+                '../companies/*',
+                '../contacts/*',
+                '../savedSearches/*',
+                '../settings/*',
+              ],
+              message:
+                'Areas import only shared modules: move what two areas need to src/components or src/format.ts.',
             },
           ],
         },

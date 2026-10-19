@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { Link } from 'react-router'
 import { ContactName } from '../components/ContactName'
 import { useEditForm } from '../components/useEditForm'
-import { roleContactTypeLabels } from '../contacts/format'
+import { roleContactTypeLabels } from '../format'
 import {
   roleContactTypes,
   type Contact,
