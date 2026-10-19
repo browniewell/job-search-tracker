@@ -1,6 +1,12 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 
-/** An inline delete confirmation that focuses Cancel, the safe choice. */
+/** Ends every delete confirmation's message. */
+const cannotBeUndone = 'This can’t be undone.'
+
+/**
+ * An inline delete confirmation that focuses Cancel, the safe choice. Its
+ * message says what will be deleted, and it adds that this can’t be undone.
+ */
 export function ConfirmDelete({
   heading,
   children,
@@ -33,7 +39,9 @@ export function ConfirmDelete({
       }}
     >
       <h3 id={`${id}-heading`}>{heading}</h3>
-      <p id={`${id}-description`}>{children}</p>
+      <p id={`${id}-description`}>
+        {children} {cannotBeUndone}
+      </p>
       <div className="form-actions">
         <button type="button" className="danger" onClick={onConfirm}>
           Delete

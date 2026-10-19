@@ -1,22 +1,18 @@
 import { useEffect, useState } from 'react'
-import { ConfirmDelete } from '../components/ConfirmDelete'
+import { EditableListItem } from '../components/EditableListItem'
 import { ExternalLink } from '../components/Fields'
-import type { SavedSearch, SavedSearchFields } from '../data/dataLayer'
+import { useEditableList } from '../components/useEditableList'
+import type { SavedSearch } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
-import { formatTimestampDate } from '../roles/format'
+import { formatTimestampDate } from '../format'
 import { SavedSearchForm } from './SavedSearchForm'
-
-type Mode =
-  | { kind: 'view' }
-  | { kind: 'add' }
-  | { kind: 'edit'; id: string }
-  | { kind: 'confirm-delete'; id: string }
 
 /** Your Saved searches, with forms to add, edit and delete them, and to mark them checked. */
 export function SavedSearchesPage() {
   const data = useDataLayer()
   const [searches, setSearches] = useState<SavedSearch[] | null>(null)
-  const [mode, setMode] = useState<Mode>({ kind: 'view' })
+  const refresh = async () => setSearches(await data.listSavedSearches())
+  const list = useEditableList(refresh)
 
   useEffect(() => {
     let cancelled = false
@@ -28,32 +24,10 @@ export function SavedSearchesPage() {
     }
   }, [data])
 
-  async function reload() {
-    setSearches(await data.listSavedSearches())
-    setMode({ kind: 'view' })
-  }
-
-  async function add(fields: SavedSearchFields) {
-    await data.createSavedSearch(fields)
-    await reload()
-  }
-
-  async function edit(id: string, fields: SavedSearchFields) {
-    await data.updateSavedSearch(id, fields)
-    await reload()
-  }
-
-  async function remove(id: string) {
-    await data.deleteSavedSearch(id)
-    await reload()
-  }
-
   async function markChecked(id: string) {
     await data.markSavedSearchChecked(id)
-    setSearches(await data.listSavedSearches())
+    await refresh()
   }
-
-  const cancel = () => setMode({ kind: 'view' })
 
   return (
     <section aria-labelledby="saved-searches-heading">
@@ -62,77 +36,60 @@ export function SavedSearchesPage() {
         <p>No Saved searches yet. Add the first one below.</p>
       ) : (
         <ul aria-label="Saved searches" className="item-list">
-          {searches.map((search) =>
-            mode.kind === 'edit' && mode.id === search.id ? (
-              <li key={search.id} className="stacked">
+          {searches.map((search) => (
+            <EditableListItem
+              key={search.id}
+              list={list}
+              id={search.id}
+              name={search.name}
+              form={
                 <SavedSearchForm
                   search={search}
-                  onSave={(fields) => edit(search.id, fields)}
-                  onCancel={cancel}
+                  onSave={(fields) =>
+                    list.save(() => data.updateSavedSearch(search.id, fields))
+                  }
+                  onCancel={list.cancel}
                 />
-              </li>
-            ) : (
-              <li key={search.id} className="stacked">
-                <h3>{search.name}</h3>
-                {search.site !== null && (
-                  <p className="secondary-text">{search.site}</p>
-                )}
-                {search.link !== null && (
-                  <p>
-                    <ExternalLink url={search.link} />
-                  </p>
-                )}
+              }
+              deleteHeading="Delete this Saved search?"
+              deleteMessage={`${search.name} will be deleted.`}
+              onDelete={() => data.deleteSavedSearch(search.id)}
+              actions={
+                <button
+                  type="button"
+                  aria-label={`Mark ${search.name} checked`}
+                  onClick={() => markChecked(search.id)}
+                >
+                  Mark checked
+                </button>
+              }
+            >
+              <h3>{search.name}</h3>
+              {search.site !== null && (
+                <p className="secondary-text">{search.site}</p>
+              )}
+              {search.link !== null && (
                 <p>
-                  {search.lastCheckedAt === null
-                    ? 'Not checked yet'
-                    : `Last checked ${formatTimestampDate(search.lastCheckedAt)}`}
+                  <ExternalLink url={search.link} />
                 </p>
-                <div className="page-actions">
-                  <button
-                    type="button"
-                    aria-label={`Mark ${search.name} checked`}
-                    onClick={() => markChecked(search.id)}
-                  >
-                    Mark checked
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    aria-label={`Edit ${search.name}`}
-                    onClick={() => setMode({ kind: 'edit', id: search.id })}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="danger"
-                    aria-label={`Delete ${search.name}`}
-                    onClick={() =>
-                      setMode({ kind: 'confirm-delete', id: search.id })
-                    }
-                  >
-                    Delete
-                  </button>
-                </div>
-                {mode.kind === 'confirm-delete' && mode.id === search.id && (
-                  <ConfirmDelete
-                    heading="Delete this Saved search?"
-                    onConfirm={() => remove(search.id)}
-                    onCancel={cancel}
-                  >
-                    {search.name} will be deleted. This can’t be undone.
-                  </ConfirmDelete>
-                )}
-              </li>
-            ),
-          )}
+              )}
+              <p>
+                {search.lastCheckedAt === null
+                  ? 'Not checked yet'
+                  : `Last checked ${formatTimestampDate(search.lastCheckedAt)}`}
+              </p>
+            </EditableListItem>
+          ))}
         </ul>
       )}
-      {mode.kind === 'add' ? (
-        <SavedSearchForm onSave={add} onCancel={cancel} />
+      {list.adding ? (
+        <SavedSearchForm
+          onSave={(fields) => list.save(() => data.createSavedSearch(fields))}
+          onCancel={list.cancel}
+        />
       ) : (
         <div className="page-actions">
-          <button type="button" onClick={() => setMode({ kind: 'add' })}>
+          <button type="button" onClick={list.startAdding}>
             Add a Saved search
           </button>
         </div>
