@@ -81,11 +81,14 @@ Where a Role currently stands in your pipeline, drawn from a configurable ordere
 _Avoid_: Stage, state, phase
 
 **Applied status**:
-The one Status flagged as meaning "you've applied"; defaults to Applied.
+The one Status flagged as meaning "you've applied"; defaults to Applied. There is always exactly one.
 
 **Parked**:
 The Status for a Role that fits except for one thing you might later relax; not closed, since you may return to it.
 _Avoid_: On hold, shelved, backlog
+
+**Parked status**:
+The Status, if any, whose Roles can be given a Parked reason; defaults to Parked and keeps that meaning when renamed.
 
 **Parked reason**:
 Why a Role was Parked, kept after it moves on.

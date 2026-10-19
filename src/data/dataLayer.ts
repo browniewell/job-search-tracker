@@ -7,12 +7,18 @@ export type Clock = () => Date
 /** Makes record ids. Random by default, so ids carry no order. */
 export type NewId = () => string
 
-export interface Status {
-  id: string
+/** The fields of a Status you can edit directly. */
+export interface StatusFields {
   name: string
-  order: number
   closed: boolean
+}
+
+export interface Status extends StatusFields {
+  id: string
+  order: number
   isApplied: boolean
+  /** Whether Roles in this Status carry a Parked reason. */
+  isParked: boolean
 }
 
 /** The fields of a Company you can edit directly. Empty fields are null. */
@@ -131,24 +137,25 @@ export interface StatusHistoryEntry {
   sequence: number
 }
 
-/**
- * The Status whose Roles carry a Parked reason. Until Statuses can be
- * configured, Parked is recognised by its default name.
- */
-export const parkedStatusName = 'Parked'
-
-const defaultStatuses: Array<Pick<Status, 'name' | 'closed' | 'isApplied'>> = [
-  { name: 'Interested', closed: false, isApplied: false },
-  { name: parkedStatusName, closed: false, isApplied: false },
-  { name: 'Applied', closed: false, isApplied: true },
-  { name: 'Recruiter Screen', closed: false, isApplied: false },
-  { name: 'Interviewing', closed: false, isApplied: false },
-  { name: 'Offer', closed: false, isApplied: false },
-  { name: 'Accepted', closed: true, isApplied: false },
-  { name: 'Rejected', closed: true, isApplied: false },
-  { name: 'No Response', closed: true, isApplied: false },
-  { name: 'Withdrawn', closed: true, isApplied: false },
-  { name: 'Passed', closed: true, isApplied: false },
+const defaultStatuses: Array<
+  Pick<Status, 'name' | 'closed' | 'isApplied' | 'isParked'>
+> = [
+  { name: 'Interested', closed: false, isApplied: false, isParked: false },
+  { name: 'Parked', closed: false, isApplied: false, isParked: true },
+  { name: 'Applied', closed: false, isApplied: true, isParked: false },
+  {
+    name: 'Recruiter Screen',
+    closed: false,
+    isApplied: false,
+    isParked: false,
+  },
+  { name: 'Interviewing', closed: false, isApplied: false, isParked: false },
+  { name: 'Offer', closed: false, isApplied: false, isParked: false },
+  { name: 'Accepted', closed: true, isApplied: false, isParked: false },
+  { name: 'Rejected', closed: true, isApplied: false, isParked: false },
+  { name: 'No Response', closed: true, isApplied: false, isParked: false },
+  { name: 'Withdrawn', closed: true, isApplied: false, isParked: false },
+  { name: 'Passed', closed: true, isApplied: false, isParked: false },
 ]
 
 /** A moment's calendar date in local time, YYYY-MM-DD. */
@@ -160,6 +167,12 @@ function localCalendarDate(moment: Date): string {
 function requireTitle(title: string): string {
   const trimmed = title.trim()
   if (!trimmed) throw new Error('A Role needs a title')
+  return trimmed
+}
+
+function requireStatusName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('A Status needs a name')
   return trimmed
 }
 
@@ -227,6 +240,21 @@ export function companyHasRolesMessage(
   return `${companyName} still has ${roles}. Link ${them} to another Company or delete ${them} first.`
 }
 
+/** Why a Status with Roles in it can't be deleted. */
+export function statusHasRolesMessage(
+  statusName: string,
+  roleCount: number,
+): string {
+  const [roles, them] =
+    roleCount === 1 ? ['1 Role', 'it'] : [`${roleCount} Roles`, 'them']
+  return `${statusName} still has ${roles}. Move ${them} to another Status first.`
+}
+
+/** Why the Applied status can't be deleted. */
+export function appliedStatusDeleteMessage(statusName: string): string {
+  return `${statusName} is the Applied status. Choose another Applied status first.`
+}
+
 const byNameIgnoringCase = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
 
@@ -266,7 +294,20 @@ export interface DataLayer {
   deleteCompany(id: string): Promise<void>
   /** The Roles linked to a Company, in the order they were created. */
   listRolesAtCompany(companyId: string): Promise<Role[]>
+  /** Every Status, in the order chosen for them. */
   listStatuses(): Promise<Status[]>
+  /** Adds a Status at the end of the list, neither Closed nor Applied. */
+  createStatus(input: { name: string }): Promise<Status>
+  /** Renames a Status or sets whether it is Closed. Status history keeps the old name. */
+  updateStatus(id: string, changes: Partial<StatusFields>): Promise<Status>
+  /** Moves a Status to a position in the list, counting from 0. */
+  moveStatus(id: string, position: number): Promise<void>
+  /** Blocked while any Role is in the Status, or while it is the Applied status. */
+  deleteStatus(id: string): Promise<void>
+  /** Makes a Status the Applied status, in place of the one that was. */
+  setAppliedStatus(id: string): Promise<void>
+  /** Makes a Status the Parked status, or none when null. */
+  setParkedStatus(id: string | null): Promise<void>
   /** Every Flag used on a Role or Company, each once, by name ignoring case. */
   listFlagSuggestions(): Promise<string[]>
   /** Whether the Role's Next action date is today or past, by the local calendar day. */
@@ -340,6 +381,19 @@ export async function openDataLayer(options: {
     await fillMissingRoleFields(tx)
     await fillMissingFields('companies', emptyCompany)(tx)
   })
+  // v7 indexes Roles by Status, to block deleting a Status with Roles in it,
+  // and flags the Parked status, until now known by its default name, so it
+  // keeps its Parked reasons when renamed.
+  db.version(7)
+    .stores({ roles: 'id, createdAt, companyId, statusId' })
+    .upgrade((tx) =>
+      tx
+        .table('statuses')
+        .toCollection()
+        .modify((status: Status) => {
+          status.isParked = status.name === 'Parked'
+        }),
+    )
   db.on('populate', (tx) => {
     tx.table('statuses').bulkAdd(
       defaultStatuses.map((status, order) => ({
@@ -361,6 +415,19 @@ export async function openDataLayer(options: {
       .first()
     if (taken) {
       throw new Error(`There is already a Company called ${taken.name}`)
+    }
+  }
+
+  // Each Status name is used once, ignoring case.
+  async function checkStatusNameIsFree({ id, name }: Status) {
+    const lower = name.toLocaleLowerCase()
+    const taken = await db.statuses
+      .filter(
+        (other) => other.id !== id && other.name.toLocaleLowerCase() === lower,
+      )
+      .first()
+    if (taken) {
+      throw new Error(`There is already a Status called ${taken.name}`)
     }
   }
 
@@ -508,6 +575,78 @@ export async function openDataLayer(options: {
     getStatusHistory: (roleId) =>
       db.statusHistory.where('roleId').equals(roleId).sortBy('sequence'),
     listStatuses: () => db.statuses.orderBy('order').toArray(),
+    createStatus: ({ name }) =>
+      db.transaction('rw', db.statuses, async () => {
+        const last = await db.statuses.orderBy('order').last()
+        const status: Status = {
+          id: newId(),
+          name: requireStatusName(name),
+          order: (last?.order ?? -1) + 1,
+          closed: false,
+          isApplied: false,
+          isParked: false,
+        }
+        await checkStatusNameIsFree(status)
+        await db.statuses.add(status)
+        return status
+      }),
+    updateStatus: (id, { name, closed }) =>
+      db.transaction('rw', db.statuses, async () => {
+        const status = await db.statuses.get(id)
+        if (!status) throw new Error(`No Status with id ${id}`)
+        const updated: Status = {
+          ...status,
+          name: requireStatusName(name ?? status.name),
+          closed: closed ?? status.closed,
+        }
+        await checkStatusNameIsFree(updated)
+        await db.statuses.put(updated)
+        return updated
+      }),
+    moveStatus: (id, position) =>
+      db.transaction('rw', db.statuses, async () => {
+        const statuses = await db.statuses.orderBy('order').toArray()
+        const from = statuses.findIndex((status) => status.id === id)
+        if (from === -1) throw new Error(`No Status with id ${id}`)
+        const [moved] = statuses.splice(from, 1)
+        statuses.splice(position, 0, moved)
+        await db.statuses.bulkPut(
+          statuses.map((status, order) => ({ ...status, order })),
+        )
+      }),
+    deleteStatus: (id) =>
+      db.transaction('rw', db.statuses, db.roles, async () => {
+        const status = await db.statuses.get(id)
+        if (!status) return
+        if (status.isApplied) {
+          throw new Error(appliedStatusDeleteMessage(status.name))
+        }
+        const roleCount = await db.roles.where('statusId').equals(id).count()
+        if (roleCount > 0) {
+          throw new Error(statusHasRolesMessage(status.name, roleCount))
+        }
+        await db.statuses.delete(id)
+      }),
+    // Exactly one Status is the Applied status at all times.
+    setAppliedStatus: (id) =>
+      db.transaction('rw', db.statuses, async () => {
+        if (!(await db.statuses.get(id))) {
+          throw new Error(`No Status with id ${id}`)
+        }
+        await db.statuses.toCollection().modify((status) => {
+          status.isApplied = status.id === id
+        })
+      }),
+    // At most one Status is the Parked status.
+    setParkedStatus: (id) =>
+      db.transaction('rw', db.statuses, async () => {
+        if (id !== null && !(await db.statuses.get(id))) {
+          throw new Error(`No Status with id ${id}`)
+        }
+        await db.statuses.toCollection().modify((status) => {
+          status.isParked = status.id === id
+        })
+      }),
     listFlagSuggestions: () =>
       db.transaction('r', db.roles, db.companies, async () => {
         const used = [

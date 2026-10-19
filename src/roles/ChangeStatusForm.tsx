@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from 'react'
-import { parkedStatusName, type Role, type Status } from '../data/dataLayer'
+import type { Role, Status } from '../data/dataLayer'
 import { FormRow } from '../components/FormRow'
 
 export function ChangeStatusForm({
@@ -19,7 +19,7 @@ export function ChangeStatusForm({
   const [error, setError] = useState<string | null>(null)
   const idPrefix = useId()
   const parking =
-    statuses.find((status) => status.id === statusId)?.name === parkedStatusName
+    statuses.find((status) => status.id === statusId)?.isParked ?? false
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

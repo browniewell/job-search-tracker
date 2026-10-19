@@ -264,4 +264,32 @@ describe('Role detail page', () => {
         .map((item) => item.textContent?.split(' · ')[0]),
     ).toEqual(['Interested', 'Interested → Parked', 'Parked → Interested'])
   })
+
+  it('Given Parked was renamed Someday, when I change a Role to Someday with a Parked reason, then the Parked reason is shown', async () => {
+    const data = await openTestDataLayer()
+    await data.createRole({ title: 'Senior QA Engineer' })
+    const parked = (await data.listStatuses()).find((s) => s.isParked)!
+    await data.updateStatus(parked.id, { name: 'Someday' })
+    const { user } = await openRoleDetail(data, 'Senior QA Engineer')
+
+    const form = screen.getByRole('form', { name: 'Change Status' })
+    await user.selectOptions(within(form).getByLabelText('Status'), 'Someday')
+    await user.type(
+      within(form).getByLabelText('Parked reason'),
+      'Hands-on expectation',
+    )
+    await user.click(
+      within(form).getByRole('button', { name: 'Change Status' }),
+    )
+
+    const fields = screen.getByRole('region', { name: 'Role fields' })
+    await waitFor(() =>
+      expect(within(fields).getByText('Status').nextSibling).toHaveTextContent(
+        'Someday',
+      ),
+    )
+    expect(
+      within(fields).getByText('Parked reason').nextSibling,
+    ).toHaveTextContent('Hands-on expectation')
+  })
 })

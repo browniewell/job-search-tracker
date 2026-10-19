@@ -54,7 +54,7 @@ for (const [device, viewport] of [
   ['phone', { width: 375, height: 812 }],
   ['desktop', { width: 1280, height: 800 }],
 ] as const) {
-  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each, list Roles and open the Pipeline board, then nothing spills out of its container and axe finds no accessibility problems`, async ({
+  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each, list Roles, open the Pipeline board and configure Statuses, then nothing spills out of its container and axe finds no accessibility problems`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport)
@@ -91,5 +91,14 @@ for (const [device, viewport] of [
     await page.getByLabel('Show Closed statuses').check()
     await expect(page.getByRole('note', { name: 'Flags' })).toBeVisible()
     await checkPage(page, 'Pipeline board')
+
+    await page.getByRole('link', { name: 'Settings' }).click()
+    await page.getByRole('button', { name: 'Rename Recruiter Screen' }).click()
+    await expect(page.getByLabel('Status name', { exact: true })).toBeVisible()
+    await checkPage(page, 'Settings, renaming a Status')
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    await page.getByRole('button', { name: 'Delete No Response' }).click()
+    await expect(page.getByRole('alertdialog')).toBeVisible()
+    await checkPage(page, 'Settings, deleting a Status')
   })
 }
