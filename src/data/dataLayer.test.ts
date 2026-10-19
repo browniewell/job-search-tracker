@@ -1385,6 +1385,31 @@ describe('Schema v9', () => {
   })
 })
 
+describe('Schema v10', () => {
+  it('Given a Role saved before Saved searches existed (schema v9), when the database is opened, then the Role reads back and there are no Saved searches', async () => {
+    const name = uniqueDatabaseName()
+    const v9 = new Dexie(name)
+    v9.version(9).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt, companyId, statusId',
+      statusHistory: 'id, roleId',
+      companies: 'id',
+      contacts: 'id, companyId',
+      roleContacts: 'id, roleId, contactId',
+      interviews: 'id, roleId, *interviewerIds',
+    })
+    const scratch = await openTestDataLayer()
+    const role = await scratch.createRole({ title: 'Senior QA Engineer' })
+    await v9.table('roles').add(role)
+    v9.close()
+
+    const data = await openTestDataLayer({ name })
+
+    expect(await data.getRole(role.id)).toEqual(role)
+    expect(await data.listSavedSearches()).toEqual([])
+  })
+})
+
 describe('Deleting with Contacts', () => {
   async function priyaOnTwoRoles() {
     const data = await openTestDataLayer()
@@ -1785,5 +1810,160 @@ describe('Deleting with Interviews', () => {
     expect((await data.listInterviewers(second.id)).map((c) => c.name)).toEqual(
       ['Priya Shah'],
     )
+  })
+})
+
+describe('Saved searches', () => {
+  it('Given Saved searches created, then empty fields are null, none has been checked, and they are listed by name, then site, then link, ignoring case', async () => {
+    const data = await openTestDataLayer()
+
+    const qa = await data.createSavedSearch({
+      name: ' alex QA ',
+      link: ' https://example.com/b ',
+      site: ' ',
+    })
+    await data.createSavedSearch({
+      name: 'QA lead',
+      link: 'https://example.com/a',
+      site: 'indeed',
+    })
+    await data.createSavedSearch({
+      name: 'qa lead',
+      link: 'https://example.com/b',
+      site: 'Indeed',
+    })
+    await data.createSavedSearch({
+      name: 'QA lead',
+      link: null,
+      site: 'LinkedIn',
+    })
+
+    expect(await data.getSavedSearch(qa.id)).toEqual({
+      id: qa.id,
+      name: 'alex QA',
+      link: 'https://example.com/b',
+      site: null,
+      lastCheckedAt: null,
+    })
+    expect(
+      (await data.listSavedSearches()).map((s) => [s.name, s.site, s.link]),
+    ).toEqual([
+      ['alex QA', null, 'https://example.com/b'],
+      ['QA lead', 'indeed', 'https://example.com/a'],
+      ['qa lead', 'Indeed', 'https://example.com/b'],
+      ['QA lead', 'LinkedIn', null],
+    ])
+  })
+
+  it('Given a Saved search never checked, when it is marked checked, then its last checked time is the clock time, and marking it again moves it to the new time', async () => {
+    let now = new Date('2026-10-16T14:30:00.000Z')
+    const data = await openTestDataLayer({ clock: () => now })
+    const search = await data.createSavedSearch({
+      name: 'QA lead',
+      link: 'https://www.linkedin.com/jobs/search?keywords=QA',
+      site: 'LinkedIn',
+    })
+
+    const checked = await data.markSavedSearchChecked(search.id)
+
+    expect(checked.lastCheckedAt).toBe('2026-10-16T14:30:00.000Z')
+    expect(await data.getSavedSearch(search.id)).toEqual(checked)
+
+    now = new Date('2026-10-18T09:00:00.000Z')
+    await data.markSavedSearchChecked(search.id)
+
+    expect((await data.getSavedSearch(search.id))?.lastCheckedAt).toBe(
+      '2026-10-18T09:00:00.000Z',
+    )
+  })
+
+  it('Given a checked Saved search, when its name, link and site are edited, then the edits are kept after the database is reopened, and so is its last checked time', async () => {
+    const name = uniqueDatabaseName()
+    const first = await openTestDataLayer({ name })
+    const search = await first.createSavedSearch({
+      name: 'QA lead',
+      link: null,
+      site: null,
+    })
+    await first.markSavedSearchChecked(search.id)
+
+    await first.updateSavedSearch(search.id, {
+      name: ' Senior QA ',
+      link: 'https://www.indeed.com/jobs?q=senior+qa',
+      site: 'Indeed',
+    })
+    first.close()
+    const reopened = await openTestDataLayer({ name })
+
+    expect(await reopened.getSavedSearch(search.id)).toEqual({
+      id: search.id,
+      name: 'Senior QA',
+      link: 'https://www.indeed.com/jobs?q=senior+qa',
+      site: 'Indeed',
+      lastCheckedAt: '2026-10-16T14:30:00.000Z',
+    })
+  })
+
+  it('Given a Saved search with a link and site, when only its name is edited, then its link and site are kept', async () => {
+    const data = await openTestDataLayer()
+    const search = await data.createSavedSearch({
+      name: 'QA lead',
+      link: 'https://www.indeed.com/jobs?q=qa+lead',
+      site: 'Indeed',
+    })
+
+    await data.updateSavedSearch(search.id, { name: 'Senior QA' })
+
+    expect(await data.getSavedSearch(search.id)).toMatchObject({
+      name: 'Senior QA',
+      link: 'https://www.indeed.com/jobs?q=qa+lead',
+      site: 'Indeed',
+    })
+  })
+
+  it('Given a blank name, when a Saved search is created or edited, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+    const search = await data.createSavedSearch({
+      name: 'QA lead',
+      link: null,
+      site: null,
+    })
+
+    await expect(
+      data.createSavedSearch({ name: '  ', link: null, site: null }),
+    ).rejects.toThrow('A Saved search needs a name')
+    await expect(
+      data.updateSavedSearch(search.id, { name: '' }),
+    ).rejects.toThrow('A Saved search needs a name')
+    expect((await data.listSavedSearches()).map((s) => s.name)).toEqual([
+      'QA lead',
+    ])
+  })
+
+  it('Given two Saved searches, when one is deleted, then only the other is listed', async () => {
+    const data = await openTestDataLayer()
+    const lead = await data.createSavedSearch({
+      name: 'QA lead',
+      link: null,
+      site: null,
+    })
+    await data.createSavedSearch({ name: 'SDET', link: null, site: null })
+
+    await data.deleteSavedSearch(lead.id)
+
+    expect((await data.listSavedSearches()).map((s) => s.name)).toEqual([
+      'SDET',
+    ])
+  })
+
+  it('Given no such Saved search, when it is marked checked or edited, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+
+    await expect(data.markSavedSearchChecked('missing')).rejects.toThrow(
+      'No Saved search with id missing',
+    )
+    await expect(
+      data.updateSavedSearch('missing', { name: 'QA lead' }),
+    ).rejects.toThrow('No Saved search with id missing')
   })
 })

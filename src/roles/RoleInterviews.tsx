@@ -91,7 +91,7 @@ export function RoleInterviews({ roleId }: { roleId: string }) {
           <ol aria-label="Interviews" className="item-list">
             {interviews.map((interview) =>
               mode.kind === 'edit' && mode.id === interview.id ? (
-                <li key={interview.id} className="interview">
+                <li key={interview.id} className="stacked">
                   <InterviewForm
                     interview={interview}
                     contacts={contacts}
@@ -100,7 +100,7 @@ export function RoleInterviews({ roleId }: { roleId: string }) {
                   />
                 </li>
               ) : (
-                <li key={interview.id} className="interview">
+                <li key={interview.id} className="stacked">
                   <h4>{interviewName(interview)}</h4>
                   <p>
                     Interviewers:{' '}

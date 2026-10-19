@@ -144,3 +144,13 @@ A Contact on an Interview. Known only through Interviews, never linked to a Role
 **Follow-up**:
 A message you send after an Interview, such as a thank-you note.
 _Avoid_: Next action (that's what you plan to do for a Role)
+
+### Searching
+
+**Saved search**:
+A job search you run again on a job site, with its name, link and site, and when you Last checked it. The same search can be saved on several sites.
+_Avoid_: Search alert, job alert, bookmark
+
+**Last checked**:
+When you last marked a Saved search checked, from the clock. Never entered by hand.
+_Avoid_: Last run, last visited

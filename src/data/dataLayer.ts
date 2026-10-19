@@ -135,6 +135,20 @@ const byTimeThenType = (a: Interview, b: Interview) =>
   a.at.localeCompare(b.at) ||
   interviewTypes.indexOf(a.type) - interviewTypes.indexOf(b.type)
 
+/** The fields of a Saved search you can edit directly. Empty fields are null. */
+export interface SavedSearchFields {
+  name: string
+  link: string | null
+  /** The job site it runs on, e.g. "LinkedIn". */
+  site: string | null
+}
+
+export interface SavedSearch extends SavedSearchFields {
+  id: string
+  /** When it was last marked checked, from the clock. */
+  lastCheckedAt: string | null
+}
+
 export type WorkArrangement = 'on-site' | 'hybrid' | 'remote'
 export type SalaryPeriod = 'annual' | 'hourly'
 export type FitRating = 1 | 2 | 3 | 4 | 5
@@ -267,6 +281,11 @@ const requireCompanyName = (name: string) =>
   requireText(name, 'A Company needs a name')
 const requireContactName = (name: string) =>
   requireText(name, 'A Contact needs a name')
+const requireSavedSearchName = (name: string) =>
+  requireText(name, 'A Saved search needs a name')
+
+/** The text trimmed, or null when it is blank or missing. */
+const textOrNull = (text: string | null) => text?.trim() || null
 
 const flagKey = (flag: string) => flag.trim().toLocaleLowerCase()
 
@@ -367,6 +386,16 @@ const byCreatedThenTitle = (a: Role, b: Role) =>
 const byNameIgnoringCase = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
 
+// Empty text sorts first.
+const byTextIgnoringCase = (a: string | null, b: string | null) =>
+  (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
+
+// The same search can be saved on several sites, so site and link break ties.
+const byNameThenSiteThenLink = (a: SavedSearch, b: SavedSearch) =>
+  byNameIgnoringCase(a, b) ||
+  byTextIgnoringCase(a.site, b.site) ||
+  byTextIgnoringCase(a.link, b.link)
+
 type Database = Dexie & {
   statuses: EntityTable<Status, 'id'>
   roles: EntityTable<Role, 'id'>
@@ -375,6 +404,7 @@ type Database = Dexie & {
   contacts: EntityTable<Contact, 'id'>
   roleContacts: EntityTable<RoleContact, 'id'>
   interviews: EntityTable<Interview, 'id'>
+  savedSearches: EntityTable<SavedSearch, 'id'>
 }
 
 export interface DataLayer {
@@ -448,6 +478,17 @@ export interface DataLayer {
    * case. Interviewers are known only through Interviews.
    */
   listInterviewers(roleId: string): Promise<Contact[]>
+  createSavedSearch(input: SavedSearchFields): Promise<SavedSearch>
+  /** Every Saved search, by name, then site, then link, ignoring case. */
+  listSavedSearches(): Promise<SavedSearch[]>
+  getSavedSearch(id: string): Promise<SavedSearch | undefined>
+  updateSavedSearch(
+    id: string,
+    changes: Partial<SavedSearchFields>,
+  ): Promise<SavedSearch>
+  deleteSavedSearch(id: string): Promise<void>
+  /** Records that you checked the Saved search now, by the clock. */
+  markSavedSearchChecked(id: string): Promise<SavedSearch>
   /** Every Status, in the order chosen for them. */
   listStatuses(): Promise<Status[]>
   /** Adds a Status at the end of the list, neither Closed nor Applied. */
@@ -555,6 +596,8 @@ export async function openDataLayer(options: {
   })
   // v9 adds Interviews, indexed by Interviewer to take a deleted Contact off them.
   db.version(9).stores({ interviews: 'id, roleId, *interviewerIds' })
+  // v10 adds Saved searches.
+  db.version(10).stores({ savedSearches: 'id' })
   db.on('populate', (tx) => {
     tx.table('statuses').bulkAdd(
       defaultStatuses.map((status, order) => ({
@@ -649,7 +692,28 @@ export async function openDataLayer(options: {
     return {
       ...interview,
       interviewerIds,
-      notes: interview.notes?.trim() || null,
+      notes: textOrNull(interview.notes),
+    }
+  }
+
+  // Edits a Saved search, checked as it is saved.
+  function changeSavedSearch(id: string, changes: Partial<SavedSearch>) {
+    return db.transaction('rw', db.savedSearches, async () => {
+      const search = await db.savedSearches.get(id)
+      if (!search) throw new Error(`No Saved search with id ${id}`)
+      const updated = checkedSavedSearch({ ...search, ...changes })
+      await db.savedSearches.put(updated)
+      return updated
+    })
+  }
+
+  // A Saved search as it is saved: a name, and empty text as null.
+  function checkedSavedSearch(search: SavedSearch): SavedSearch {
+    return {
+      ...search,
+      name: requireSavedSearchName(search.name),
+      link: textOrNull(search.link),
+      site: textOrNull(search.site),
     }
   }
 
@@ -953,6 +1017,22 @@ export async function openDataLayer(options: {
       ),
     getStatusHistory: (roleId) =>
       db.statusHistory.where('roleId').equals(roleId).sortBy('sequence'),
+    createSavedSearch: async (fields) => {
+      const search = checkedSavedSearch({
+        id: newId(),
+        ...fields,
+        lastCheckedAt: null,
+      })
+      await db.savedSearches.add(search)
+      return search
+    },
+    listSavedSearches: async () =>
+      (await db.savedSearches.toArray()).sort(byNameThenSiteThenLink),
+    getSavedSearch: (id) => db.savedSearches.get(id),
+    updateSavedSearch: (id, changes) => changeSavedSearch(id, changes),
+    deleteSavedSearch: (id) => db.savedSearches.delete(id),
+    markSavedSearchChecked: (id) =>
+      changeSavedSearch(id, { lastCheckedAt: options.clock().toISOString() }),
     listStatuses: () => db.statuses.orderBy('order').toArray(),
     createStatus: ({ name }) =>
       db.transaction('rw', db.statuses, async () => {
