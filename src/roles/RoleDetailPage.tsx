@@ -135,7 +135,7 @@ export function RoleDetailPage() {
               onCancel={() => setMode('view')}
             >
               “{role.title}”, its Status history, Role contacts and Interviews
-              will be deleted. Its Contacts are kept. This can’t be undone.
+              will be deleted. Its Contacts are kept.
             </ConfirmDelete>
           )}
           <ChangeStatusForm

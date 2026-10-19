@@ -7,10 +7,9 @@ import {
 import { Link } from 'react-router'
 import type { Company, Role } from '../data/dataLayer'
 import { CompanyNotDisclosed } from './CompanyNotDisclosed'
+import { formatCalendarDate, formatTimestampDate } from '../format'
 import {
-  formatCalendarDate,
   formatPostedSalary,
-  formatTimestampDate,
   formatYearlySalary,
   workArrangementLabels,
 } from './format'

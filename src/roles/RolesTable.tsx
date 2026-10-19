@@ -24,9 +24,9 @@ import {
   type WorkArrangement,
 } from '../data/dataLayer'
 import { CompanyNotDisclosed } from './CompanyNotDisclosed'
+import { formatCalendarDate } from '../format'
 import {
   companyNotDisclosed,
-  formatCalendarDate,
   formatPostedSalary,
   workArrangementLabels,
 } from './format'

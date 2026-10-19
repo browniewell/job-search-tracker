@@ -1,5 +1,5 @@
 import type { StatusHistoryEntry } from '../data/dataLayer'
-import { formatTimestamp } from './format'
+import { formatTimestamp } from '../format'
 
 /** A Role's Status history, starting with the Status it was created in. */
 export function StatusTimeline({ entries }: { entries: StatusHistoryEntry[] }) {

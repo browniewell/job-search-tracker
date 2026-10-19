@@ -133,8 +133,7 @@ export function CompanyDetailPage() {
             >
               “{company.name}” will be deleted.
               {contacts.length > 0 &&
-                ` ${companyContactsKeptMessage(contacts.length)}`}{' '}
-              This can’t be undone.
+                ` ${companyContactsKeptMessage(contacts.length)}`}
             </ConfirmDelete>
           )}
           <section aria-label="Company fields" className="detail-fields">

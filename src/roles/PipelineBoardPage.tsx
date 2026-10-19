@@ -25,7 +25,7 @@ import {
 } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 import { CompanyNotDisclosed } from './CompanyNotDisclosed'
-import { formatCalendarDate } from './format'
+import { formatCalendarDate } from '../format'
 import { errorMessage } from '../errorMessage'
 
 /** What the board shows: every Role, with the Companies and Statuses they link to. */

@@ -1,27 +1,23 @@
 import { useEffect, useId, useState } from 'react'
-import { ConfirmDelete } from '../components/ConfirmDelete'
 import { ContactLink, ContactName } from '../components/ContactName'
+import { EditableListItem } from '../components/EditableListItem'
 import { MultilineText } from '../components/Fields'
+import { useEditableList } from '../components/useEditableList'
 import type {
   Contact,
   InterviewFields,
   ListedInterview,
 } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
+import { formatLocalDateTime } from '../format'
 import { InterviewForm } from './InterviewForm'
-import { formatLocalDateTime, interviewTypeLabels } from './format'
+import { interviewTypeLabels } from './format'
 
 type Loaded = {
   interviews: ListedInterview[]
   interviewers: Contact[]
   contacts: Contact[]
 }
-
-type Mode =
-  | { kind: 'view' }
-  | { kind: 'log' }
-  | { kind: 'edit'; id: string }
-  | { kind: 'confirm-delete'; id: string }
 
 /** How an Interview is named: its type, then when it is. */
 function interviewName(interview: InterviewFields): string {
@@ -36,7 +32,11 @@ export function RoleInterviews({ roleId }: { roleId: string }) {
   const data = useDataLayer()
   const id = useId()
   const [loaded, setLoaded] = useState<Loaded | null>(null)
-  const [mode, setMode] = useState<Mode>({ kind: 'view' })
+  const list = useEditableList(async () => {
+    const interviews = await data.listInterviews(roleId)
+    const interviewers = await data.listInterviewers(roleId)
+    setLoaded((current) => current && { ...current, interviews, interviewers })
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -55,32 +55,6 @@ export function RoleInterviews({ roleId }: { roleId: string }) {
   if (loaded === null) return null
   const { interviews, interviewers, contacts } = loaded
 
-  async function reload() {
-    setLoaded({
-      interviews: await data.listInterviews(roleId),
-      interviewers: await data.listInterviewers(roleId),
-      contacts,
-    })
-    setMode({ kind: 'view' })
-  }
-
-  async function log(fields: InterviewFields) {
-    await data.createInterview({ roleId, ...fields })
-    await reload()
-  }
-
-  async function edit(interviewId: string, fields: InterviewFields) {
-    await data.updateInterview(interviewId, fields)
-    await reload()
-  }
-
-  async function remove(interviewId: string) {
-    await data.deleteInterview(interviewId)
-    await reload()
-  }
-
-  const cancel = () => setMode({ kind: 'view' })
-
   return (
     <>
       <section aria-labelledby={`${id}-heading`} className="role-interviews">
@@ -89,83 +63,64 @@ export function RoleInterviews({ roleId }: { roleId: string }) {
           <p>No Interviews logged yet.</p>
         ) : (
           <ol aria-label="Interviews" className="item-list">
-            {interviews.map((interview) =>
-              mode.kind === 'edit' && mode.id === interview.id ? (
-                <li key={interview.id} className="stacked">
+            {interviews.map((interview) => (
+              <EditableListItem
+                key={interview.id}
+                list={list}
+                id={interview.id}
+                name={interviewName(interview)}
+                form={
                   <InterviewForm
                     interview={interview}
                     contacts={contacts}
-                    onSave={(fields) => edit(interview.id, fields)}
-                    onCancel={cancel}
+                    onSave={(fields) =>
+                      list.save(() =>
+                        data.updateInterview(interview.id, fields),
+                      )
+                    }
+                    onCancel={list.cancel}
                   />
-                </li>
-              ) : (
-                <li key={interview.id} className="stacked">
-                  <h4>{interviewName(interview)}</h4>
+                }
+                deleteHeading="Delete this Interview?"
+                deleteMessage={`The ${interviewName(interview)} Interview will be deleted. Its Interviewers are kept as Contacts.`}
+                onDelete={() => data.deleteInterview(interview.id)}
+              >
+                <h4>{interviewName(interview)}</h4>
+                <p>
+                  Interviewers:{' '}
+                  {interview.interviewers.length === 0
+                    ? 'none named'
+                    : interview.interviewers.map((contact, i) => (
+                        <span key={contact.id}>
+                          {i > 0 && ', '}
+                          <ContactLink contact={contact} />
+                        </span>
+                      ))}
+                </p>
+                <p>
+                  {interview.followUpSent
+                    ? 'Follow-up sent'
+                    : 'No Follow-up sent yet'}
+                </p>
+                {interview.notes !== null && (
                   <p>
-                    Interviewers:{' '}
-                    {interview.interviewers.length === 0
-                      ? 'none named'
-                      : interview.interviewers.map((contact, i) => (
-                          <span key={contact.id}>
-                            {i > 0 && ', '}
-                            <ContactLink contact={contact} />
-                          </span>
-                        ))}
+                    <MultilineText value={interview.notes} />
                   </p>
-                  <p>
-                    {interview.followUpSent
-                      ? 'Follow-up sent'
-                      : 'No Follow-up sent yet'}
-                  </p>
-                  {interview.notes !== null && (
-                    <p>
-                      <MultilineText value={interview.notes} />
-                    </p>
-                  )}
-                  <div className="page-actions">
-                    <button
-                      type="button"
-                      className="secondary"
-                      aria-label={`Edit ${interviewName(interview)}`}
-                      onClick={() =>
-                        setMode({ kind: 'edit', id: interview.id })
-                      }
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      aria-label={`Delete ${interviewName(interview)}`}
-                      onClick={() =>
-                        setMode({ kind: 'confirm-delete', id: interview.id })
-                      }
-                    >
-                      Delete
-                    </button>
-                  </div>
-                  {mode.kind === 'confirm-delete' &&
-                    mode.id === interview.id && (
-                      <ConfirmDelete
-                        heading="Delete this Interview?"
-                        onConfirm={() => remove(interview.id)}
-                        onCancel={cancel}
-                      >
-                        The {interviewName(interview)} Interview will be
-                        deleted. Its Interviewers are kept as Contacts. This
-                        can’t be undone.
-                      </ConfirmDelete>
-                    )}
-                </li>
-              ),
-            )}
+                )}
+              </EditableListItem>
+            ))}
           </ol>
         )}
-        {mode.kind === 'log' ? (
-          <InterviewForm contacts={contacts} onSave={log} onCancel={cancel} />
+        {list.adding ? (
+          <InterviewForm
+            contacts={contacts}
+            onSave={(fields) =>
+              list.save(() => data.createInterview({ roleId, ...fields }))
+            }
+            onCancel={list.cancel}
+          />
         ) : (
-          <button type="button" onClick={() => setMode({ kind: 'log' })}>
+          <button type="button" onClick={list.startAdding}>
             Log an Interview
           </button>
         )}
