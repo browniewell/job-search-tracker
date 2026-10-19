@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
+import { AddByNameForm } from '../components/AddByNameForm'
 import type { Company, Role, Status } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 import { RolesTable } from './RolesTable'
@@ -8,7 +9,6 @@ export function RolesPage() {
   const [roles, setRoles] = useState<Role[] | null>(null)
   const [companies, setCompanies] = useState<Company[]>([])
   const [statuses, setStatuses] = useState<Status[]>([])
-  const [title, setTitle] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -27,28 +27,19 @@ export function RolesPage() {
     }
   }, [data])
 
-  async function addRole(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const trimmed = title.trim()
-    if (!trimmed) return
-    await data.createRole({ title: trimmed })
-    setTitle('')
+  async function addRole(title: string) {
+    await data.createRole({ title })
     setRoles(await data.listRoles())
   }
 
   return (
     <section aria-labelledby="roles-heading">
       <h2 id="roles-heading">Roles</h2>
-      <form className="add-form" onSubmit={addRole}>
-        <label htmlFor="role-title">Role title</label>
-        <input
-          id="role-title"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          autoComplete="off"
-        />
-        <button type="submit">Add Role</button>
-      </form>
+      <AddByNameForm
+        label="Role title"
+        buttonLabel="Add Role"
+        onAdd={addRole}
+      />
       {roles === null ? null : roles.length === 0 ? (
         <p>No Roles yet. Add the first one above.</p>
       ) : (

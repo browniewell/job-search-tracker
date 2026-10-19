@@ -2,7 +2,8 @@ import { useId, useState, type FormEvent } from 'react'
 
 /**
  * A one-field form that adds something by name, shows the data layer's
- * error if it refuses, and clears once added.
+ * error if it refuses, and clears once added. An `onAdd` that shows errors
+ * itself resolves false when nothing was added, keeping the name to fix.
  */
 export function AddByNameForm({
   label,
@@ -11,7 +12,7 @@ export function AddByNameForm({
 }: {
   label: string
   buttonLabel: string
-  onAdd: (name: string) => Promise<void>
+  onAdd: (name: string) => Promise<boolean | void>
 }) {
   const id = useId()
   const [name, setName] = useState('')
@@ -21,7 +22,7 @@ export function AddByNameForm({
     event.preventDefault()
     if (!name.trim()) return
     try {
-      await onAdd(name)
+      if ((await onAdd(name)) === false) return
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
       return

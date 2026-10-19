@@ -199,7 +199,7 @@ describe('Role contacts on the Role detail page', () => {
     )
 
     expect(await within(contacts).findByRole('alert')).toHaveTextContent(
-      'Priya Shah is already a recruiter on this Role',
+      'Priya Shah is already linked to this Role as recruiter',
     )
     expect(
       within(contacts).getAllByRole('link', { name: 'Priya Shah' }),

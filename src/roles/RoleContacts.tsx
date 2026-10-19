@@ -1,18 +1,55 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Link } from 'react-router'
-import { FormRow } from '../components/FormRow'
+import { useEditForm } from '../components/useEditForm'
 import { roleContactTypeLabels } from '../contacts/format'
 import {
   roleContactTypes,
   type Contact,
-  type RoleContact,
+  type LinkedContact,
   type RoleContactType,
 } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 
 type Loaded = {
-  roleContacts: Array<RoleContact & { contact: Contact }>
+  roleContacts: LinkedContact[]
   contacts: Contact[]
+}
+
+function LinkContactForm({
+  contacts,
+  onLink,
+}: {
+  contacts: Contact[]
+  onLink: (contactId: string, type: RoleContactType) => Promise<void>
+}) {
+  const { submit, errorMessage, select } = useEditForm(
+    () => ({ contactId: '', type: '' }),
+    async ({ contactId, type }) => {
+      if (contactId && type) await onLink(contactId, type as RoleContactType)
+    },
+  )
+  return (
+    <form
+      className="link-contact"
+      onSubmit={submit}
+      aria-label="Link a Contact"
+    >
+      {select(
+        'contactId',
+        'Contact',
+        'Choose a Contact',
+        contacts.map((contact) => [contact.id, contact.name]),
+      )}
+      {select(
+        'type',
+        'Type',
+        'Choose a type',
+        roleContactTypes.map((type) => [type, roleContactTypeLabels[type]]),
+      )}
+      <button type="submit">Link Contact</button>
+      {errorMessage}
+    </form>
+  )
 }
 
 /** A Role's Role contacts by type, with a form to link another Contact. */
@@ -20,9 +57,8 @@ export function RoleContacts({ roleId }: { roleId: string }) {
   const data = useDataLayer()
   const id = useId()
   const [loaded, setLoaded] = useState<Loaded | null>(null)
-  const [contactId, setContactId] = useState('')
-  const [type, setType] = useState<RoleContactType | ''>('')
-  const [error, setError] = useState<string | null>(null)
+  // Remounts the link form, clearing it, after each Contact is linked.
+  const [linkCount, setLinkCount] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -46,18 +82,9 @@ export function RoleContacts({ roleId }: { roleId: string }) {
     })
   }
 
-  async function link(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!contactId || !type) return
-    try {
-      await data.linkContact({ roleId, contactId, type })
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-      return
-    }
-    setError(null)
-    setContactId('')
-    setType('')
+  async function link(contactId: string, type: RoleContactType) {
+    await data.linkContact({ roleId, contactId, type })
+    setLinkCount((count) => count + 1)
     await reload()
   }
 
@@ -112,46 +139,7 @@ export function RoleContacts({ roleId }: { roleId: string }) {
           <Link to="/contacts">Add a Contact</Link> to link them to this Role.
         </p>
       ) : (
-        <form className="link-contact" onSubmit={link}>
-          <FormRow id={`${id}-contact`} label="Contact">
-            <select
-              id={`${id}-contact`}
-              required
-              value={contactId}
-              onChange={(event) => setContactId(event.target.value)}
-            >
-              <option value="">Choose a Contact</option>
-              {contacts.map((contact) => (
-                <option key={contact.id} value={contact.id}>
-                  {contact.name}
-                </option>
-              ))}
-            </select>
-          </FormRow>
-          <FormRow id={`${id}-type`} label="Type">
-            <select
-              id={`${id}-type`}
-              required
-              value={type}
-              onChange={(event) =>
-                setType(event.target.value as RoleContactType | '')
-              }
-            >
-              <option value="">Choose a type</option>
-              {roleContactTypes.map((option) => (
-                <option key={option} value={option}>
-                  {roleContactTypeLabels[option]}
-                </option>
-              ))}
-            </select>
-          </FormRow>
-          <button type="submit">Link Contact</button>
-        </form>
-      )}
-      {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
+        <LinkContactForm key={linkCount} contacts={contacts} onLink={link} />
       )}
     </section>
   )

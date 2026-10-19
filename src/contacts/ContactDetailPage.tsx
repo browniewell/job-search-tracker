@@ -11,8 +11,7 @@ import type {
   Company,
   Contact,
   ContactFields,
-  Role,
-  RoleContact,
+  LinkedRole,
 } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 import { ContactForm } from './ContactForm'
@@ -21,7 +20,7 @@ import { roleContactTypeLabels } from './format'
 type Loaded = {
   contact: Contact | undefined
   companies: Company[]
-  roles: Array<RoleContact & { role: Role }>
+  roles: LinkedRole[]
 }
 type Mode = 'view' | 'edit' | 'confirm-delete'
 

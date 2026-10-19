@@ -9,6 +9,7 @@ import {
   MultilineText,
 } from '../components/Fields'
 import {
+  companyContactsKeptMessage,
   companyHasRolesMessage,
   type Company,
   type CompanyFields,
@@ -25,11 +26,6 @@ type Loaded = {
   flagSuggestions: string[]
 }
 type Mode = 'view' | 'edit' | 'confirm-delete'
-
-function keptContactsMessage(contactCount: number): string {
-  const contacts = contactCount === 1 ? '1 Contact' : `${contactCount} Contacts`
-  return `Its ${contacts} will be kept, with no Company.`
-}
 
 export function CompanyDetailPage() {
   const data = useDataLayer()
@@ -136,7 +132,7 @@ export function CompanyDetailPage() {
             >
               “{company.name}” will be deleted.
               {contacts.length > 0 &&
-                ` ${keptContactsMessage(contacts.length)}`}{' '}
+                ` ${companyContactsKeptMessage(contacts.length)}`}{' '}
               This can’t be undone.
             </ConfirmDelete>
           )}

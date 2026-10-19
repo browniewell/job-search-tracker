@@ -1227,7 +1227,7 @@ describe('Role contacts', () => {
 
     await expect(
       data.linkContact({ ...link, type: 'recruiter' }),
-    ).rejects.toThrow('Priya Shah is already a recruiter on this Role')
+    ).rejects.toThrow('Priya Shah is already linked to this Role as recruiter')
     await data.linkContact({ ...link, type: 'hiring manager' })
 
     expect((await data.listRoleContacts(role.id)).map((r) => r.type)).toEqual([

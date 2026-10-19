@@ -131,7 +131,7 @@ A Contact's job title, such as "Senior Technical Recruiter".
 _Avoid_: Role (that word means a posting here), Role title, position
 
 **Role contact**:
-A link between a Contact and a Role, typed as referrer, recruiter, hiring manager or other.
+A link between a Contact and a Role, typed as referrer, recruiter, hiring manager or other. A Contact can hold several types on one Role, each once, and link to many Roles.
 _Avoid_: Relationship, association
 
 **Interview**:

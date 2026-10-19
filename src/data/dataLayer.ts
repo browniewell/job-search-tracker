@@ -90,6 +90,15 @@ export interface RoleContact {
   type: RoleContactType
 }
 
+/** A Role contact with its Contact, as a Role lists it. */
+export type LinkedContact = RoleContact & { contact: Contact }
+
+/** A Role contact with its Role, as a Contact lists it. */
+export type LinkedRole = RoleContact & { role: Role }
+
+const byRoleContactType = (a: RoleContact, b: RoleContact) =>
+  roleContactTypes.indexOf(a.type) - roleContactTypes.indexOf(b.type)
+
 export type WorkArrangement = 'on-site' | 'hybrid' | 'remote'
 export type SalaryPeriod = 'annual' | 'hourly'
 export type FitRating = 1 | 2 | 3 | 4 | 5
@@ -271,14 +280,24 @@ function checkFitRating(fitRating: FitRating | null): void {
   }
 }
 
+/** A count and its noun, with the pronoun that stands for them: "1 Role", "it". */
+function counted(count: number, noun: string): [string, string] {
+  return count === 1 ? [`1 ${noun}`, 'it'] : [`${count} ${noun}s`, 'them']
+}
+
 /** Why a Company with Roles can't be deleted. */
 export function companyHasRolesMessage(
   companyName: string,
   roleCount: number,
 ): string {
-  const [roles, them] =
-    roleCount === 1 ? ['1 Role', 'it'] : [`${roleCount} Roles`, 'them']
+  const [roles, them] = counted(roleCount, 'Role')
   return `${companyName} still has ${roles}. Link ${them} to another Company or delete ${them} first.`
+}
+
+/** What deleting a Company does to its Contacts. */
+export function companyContactsKeptMessage(contactCount: number): string {
+  const [contacts] = counted(contactCount, 'Contact')
+  return `Its ${contacts} will be kept, with no Company.`
 }
 
 /** Why a Status with Roles in it can't be deleted. */
@@ -286,8 +305,7 @@ export function statusHasRolesMessage(
   statusName: string,
   roleCount: number,
 ): string {
-  const [roles, them] =
-    roleCount === 1 ? ['1 Role', 'it'] : [`${roleCount} Roles`, 'them']
+  const [roles, them] = counted(roleCount, 'Role')
   return `${statusName} still has ${roles}. Move ${them} to another Status first.`
 }
 
@@ -358,13 +376,9 @@ export interface DataLayer {
   linkContact(input: Omit<RoleContact, 'id'>): Promise<RoleContact>
   unlinkContact(roleContactId: string): Promise<void>
   /** A Role's Role contacts, by type in `roleContactTypes` order, then by name ignoring case. */
-  listRoleContacts(
-    roleId: string,
-  ): Promise<Array<RoleContact & { contact: Contact }>>
+  listRoleContacts(roleId: string): Promise<LinkedContact[]>
   /** The Role contacts of a Contact, by their Roles in the order added, then Role title. */
-  listRolesOfContact(
-    contactId: string,
-  ): Promise<Array<RoleContact & { role: Role }>>
+  listRolesOfContact(contactId: string): Promise<LinkedRole[]>
   /** Every Status, in the order chosen for them. */
   listStatuses(): Promise<Status[]>
   /** Adds a Status at the end of the list, neither Closed nor Applied. */
@@ -679,7 +693,9 @@ export async function openDataLayer(options: {
           .filter((r) => r.contactId === contactId && r.type === type)
           .first()
         if (repeated) {
-          throw new Error(`${contact.name} is already a ${type} on this Role`)
+          throw new Error(
+            `${contact.name} is already linked to this Role as ${type}`,
+          )
         }
         const roleContact: RoleContact = {
           id: newId(),
@@ -704,8 +720,7 @@ export async function openDataLayer(options: {
           .map((link, i) => ({ ...link, contact: contacts[i]! }))
           .sort(
             (a, b) =>
-              roleContactTypes.indexOf(a.type) -
-                roleContactTypes.indexOf(b.type) ||
+              byRoleContactType(a, b) ||
               byNameIgnoringCase(a.contact, b.contact),
           )
       }),
@@ -720,9 +735,7 @@ export async function openDataLayer(options: {
           .map((link, i) => ({ ...link, role: roles[i]! }))
           .sort(
             (a, b) =>
-              byCreatedThenTitle(a.role, b.role) ||
-              roleContactTypes.indexOf(a.type) -
-                roleContactTypes.indexOf(b.type),
+              byCreatedThenTitle(a.role, b.role) || byRoleContactType(a, b),
           )
       }),
     changeStatus: (roleId, statusId, changes = {}) =>

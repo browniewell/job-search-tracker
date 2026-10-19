@@ -31,7 +31,7 @@ export function ContactsPage() {
   }
 
   // A Contact's Title and Company, where known, e.g. "Recruiter at Acme".
-  function description(contact: Contact): string | null {
+  function titleAtCompany(contact: Contact): string | null {
     const company = loaded?.companies.find((c) => c.id === contact.companyId)
     return (
       [contact.title, company && `at ${company.name}`]
@@ -55,7 +55,7 @@ export function ContactsPage() {
           {loaded.contacts.map((contact) => (
             <li key={contact.id}>
               <Link to={`/contacts/${contact.id}`}>{contact.name}</Link>
-              <span className="secondary-text">{description(contact)}</span>
+              <span className="secondary-text">{titleAtCompany(contact)}</span>
             </li>
           ))}
         </ul>
