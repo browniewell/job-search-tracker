@@ -4,6 +4,8 @@
 
 Wherever a skill says to typecheck, run `npm run check`: TypeScript, ESLint (whose React rules catch what tsc misses, such as a component defined inside another) and Prettier, as CI runs them.
 
+Compare a branch with `origin/main` after `git fetch` (for diffs, reviews and `--changed`), as CI does: PRs merge on GitHub, so local `main` falls behind.
+
 ## Agent skills
 
 ### Issue tracker
