@@ -26,6 +26,7 @@ import {
 import { useDataLayer } from '../dataContext'
 import { CompanyNotDisclosed } from './CompanyNotDisclosed'
 import { formatCalendarDate } from './format'
+import { errorMessage } from '../errorMessage'
 
 /** What the board shows: every Role, with the Companies and Statuses they link to. */
 type BoardData = { roles: Role[]; companies: Company[]; statuses: Status[] }
@@ -135,7 +136,7 @@ export function PipelineBoardPage() {
       replaceRole(await data.changeStatus(role.id, statusId))
       setError(null)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
       const saved = await data.listRoles()
       setRoles(() => saved)
     }

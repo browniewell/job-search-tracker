@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from 'react'
+import { errorMessage } from '../errorMessage'
 
 /**
  * A one-field form that adds something by name, shows the data layer's
@@ -24,7 +25,7 @@ export function AddByNameForm({
     try {
       if ((await onAdd(name)) === false) return
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
       return
     }
     setError(null)

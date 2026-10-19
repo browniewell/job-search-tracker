@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from 'react'
 import type { Role, Status } from '../data/dataLayer'
 import { FormRow } from '../components/FormRow'
 import { StatusOptions } from '../components/StatusOptions'
+import { errorMessage } from '../errorMessage'
 
 export function ChangeStatusForm({
   role,
@@ -31,7 +32,7 @@ export function ChangeStatusForm({
       )
       setError(null)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     }
   }
 
