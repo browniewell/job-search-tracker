@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from 'react'
 import { FormRow } from './FormRow'
+import { errorMessage as messageOf } from '../errorMessage'
 
 /** The fields of a form's values that are held as text. */
 type TextField<V> = {
@@ -30,7 +31,7 @@ export function useEditForm<V extends object>(
     try {
       await onSave(values)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(messageOf(cause))
     }
   }
 

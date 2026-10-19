@@ -41,4 +41,20 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // A refused operation's message is read in one place (CODING_STANDARDS.md,
+    // "Extend, don't copy"); this pattern was copied into six handlers.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/errorMessage.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "ConditionalExpression > BinaryExpression.test[operator='instanceof'][right.name='Error']",
+          message: 'Use errorMessage(cause) from src/errorMessage.ts.',
+        },
+      ],
+    },
+  },
 ])

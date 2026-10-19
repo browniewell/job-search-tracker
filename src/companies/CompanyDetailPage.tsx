@@ -18,6 +18,7 @@ import {
 } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 import { CompanyForm } from './CompanyForm'
+import { errorMessage } from '../errorMessage'
 
 type Loaded = {
   company: Company | undefined
@@ -89,7 +90,7 @@ export function CompanyDetailPage() {
       navigate('/companies')
     } catch (cause) {
       setMode('view')
-      setDeleteError(cause instanceof Error ? cause.message : String(cause))
+      setDeleteError(errorMessage(cause))
     }
   }
 

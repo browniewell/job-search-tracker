@@ -10,6 +10,7 @@ import {
   type Status,
 } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
+import { errorMessage } from '../errorMessage'
 
 const noParkedStatus = ''
 
@@ -85,7 +86,7 @@ export function SettingsPage() {
       await operation()
       setError(null)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
       made = false
     }
     setStatuses(await data.listStatuses())
