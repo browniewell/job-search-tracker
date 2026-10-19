@@ -47,9 +47,12 @@ async function checkPage(page: Page, name: string) {
   await page.emulateMedia({ colorScheme: null })
 }
 
+// CI's Linux fonts run about 17% wider than macOS's: 320 locally lays out
+// like 375 on CI. Locally each width shrinks by that much, so a layout that
+// only just fits here fails here, not first on CI.
+const fontScale = process.env.CI ? 1 : 320 / 375
+
 for (const [device, viewport] of [
-  // Font metrics differ by OS: the narrowest phone shows locally what CI's
-  // wider fonts show at 375.
   ['small phone', { width: 320, height: 640 }],
   ['phone', { width: 375, height: 812 }],
   ['desktop', { width: 1280, height: 800 }],
@@ -57,7 +60,10 @@ for (const [device, viewport] of [
   test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each, list Roles, open the Pipeline board and configure Statuses, then nothing spills out of its container and axe finds no accessibility problems`, async ({
     page,
   }) => {
-    await page.setViewportSize(viewport)
+    await page.setViewportSize({
+      width: Math.round(viewport.width * fontScale),
+      height: viewport.height,
+    })
     await page.goto('/#/companies')
     await page.getByLabel('Company name').fill('Acme')
     await page.getByRole('button', { name: 'Add Company' }).click()
