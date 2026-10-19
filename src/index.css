@@ -138,7 +138,8 @@ button {
   outline-offset: 2px;
 }
 
-.add-form {
+.add-form,
+.link-contact {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

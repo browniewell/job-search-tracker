@@ -12,6 +12,7 @@ import { ConfirmDelete } from '../components/ConfirmDelete'
 import { FlagBadge } from '../components/FlagBadge'
 import { useDataLayer } from '../dataContext'
 import { ChangeStatusForm } from './ChangeStatusForm'
+import { RoleContacts } from './RoleContacts'
 import { RoleFieldsView } from './RoleFieldsView'
 import { RoleForm } from './RoleForm'
 import { StatusTimeline } from './StatusTimeline'
@@ -132,8 +133,8 @@ export function RoleDetailPage() {
               onConfirm={deleteRole}
               onCancel={() => setMode('view')}
             >
-              “{role.title}” and its Status history will be deleted. This can’t
-              be undone.
+              “{role.title}”, its Status history and its Role contacts will be
+              deleted. Its Contacts are kept. This can’t be undone.
             </ConfirmDelete>
           )}
           <ChangeStatusForm
@@ -148,6 +149,7 @@ export function RoleDetailPage() {
             statusName={statusName}
             parked={status?.isParked ?? false}
           />
+          <RoleContacts roleId={roleId} />
           <StatusTimeline entries={history} />
         </>
       )}

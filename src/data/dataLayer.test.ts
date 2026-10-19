@@ -1,7 +1,7 @@
 import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
 import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
-import type { DataLayer, FitRating } from './dataLayer'
+import type { DataLayer, FitRating, RoleContactType } from './dataLayer'
 
 describe('Statuses', () => {
   it('Given a first run, then the default Statuses are seeded in order', async () => {
@@ -1051,5 +1051,385 @@ describe('Next action due', () => {
     expect(data.isNextActionDue(dated('2026-10-16'))).toBe(true)
     expect(data.isNextActionDue(dated('2026-10-17'))).toBe(false)
     expect(data.isNextActionDue(dated(null))).toBe(false)
+  })
+})
+
+describe('Contacts', () => {
+  it('Given Contacts created with only a name, then the other fields are empty and they are listed by name, ignoring case', async () => {
+    const data = await openTestDataLayer()
+
+    const priya = await data.createContact({ name: '  Priya Shah ' })
+    await data.createContact({ name: 'alex Kim' })
+    await data.createContact({ name: 'Morgan Lee' })
+
+    expect(await data.getContact(priya.id)).toEqual({
+      id: priya.id,
+      name: 'Priya Shah',
+      title: null,
+      companyId: null,
+      howYouKnow: null,
+      email: null,
+      linkedIn: null,
+      notes: null,
+    })
+    expect((await data.listContacts()).map((c) => c.name)).toEqual([
+      'alex Kim',
+      'Morgan Lee',
+      'Priya Shah',
+    ])
+  })
+
+  it('Given a blank name, when a Contact is created or edited, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+    const priya = await data.createContact({ name: 'Priya Shah' })
+
+    await expect(data.createContact({ name: '  ' })).rejects.toThrow(
+      'A Contact needs a name',
+    )
+    await expect(data.updateContact(priya.id, { name: '' })).rejects.toThrow(
+      'A Contact needs a name',
+    )
+    expect((await data.listContacts()).map((c) => c.name)).toEqual([
+      'Priya Shah',
+    ])
+  })
+
+  it('Given a Contact, when its fields are edited, then the edits are kept after the database is reopened', async () => {
+    const name = uniqueDatabaseName()
+    const first = await openTestDataLayer({ name })
+    const acme = await first.createCompany({ name: 'Acme' })
+    const contact = await first.createContact({ name: 'Priya Shah' })
+
+    await first.updateContact(contact.id, {
+      name: 'Priya Shah-Patel',
+      title: 'Senior Technical Recruiter',
+      companyId: acme.id,
+      howYouKnow: 'Worked together at Initech',
+      email: 'priya@example.com',
+      linkedIn: 'https://www.linkedin.com/in/priya',
+      notes: 'Prefers email',
+    })
+    first.close()
+    const second = await openTestDataLayer({ name })
+
+    expect(await second.getContact(contact.id)).toEqual({
+      id: contact.id,
+      name: 'Priya Shah-Patel',
+      title: 'Senior Technical Recruiter',
+      companyId: acme.id,
+      howYouKnow: 'Worked together at Initech',
+      email: 'priya@example.com',
+      linkedIn: 'https://www.linkedin.com/in/priya',
+      notes: 'Prefers email',
+    })
+  })
+
+  it('Given no such Company, when a Contact is linked to it, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+    const contact = await data.createContact({ name: 'Priya Shah' })
+
+    await expect(
+      data.updateContact(contact.id, { companyId: 'no-such-company' }),
+    ).rejects.toThrow('No Company with id no-such-company')
+    expect((await data.getContact(contact.id))?.companyId).toBeNull()
+  })
+
+  it('Given Contacts at Acme and elsewhere, then Acme lists only its own, by name ignoring case', async () => {
+    const data = await openTestDataLayer()
+    const acme = await data.createCompany({ name: 'Acme' })
+    const globex = await data.createCompany({ name: 'Globex' })
+    for (const [name, companyId] of [
+      ['Priya Shah', acme.id],
+      ['alex Kim', acme.id],
+      ['Morgan Lee', globex.id],
+      ['Sam Ortiz', null],
+    ] as const) {
+      const contact = await data.createContact({ name })
+      await data.updateContact(contact.id, { companyId })
+    }
+
+    expect(
+      (await data.listContactsAtCompany(acme.id)).map((c) => c.name),
+    ).toEqual(['alex Kim', 'Priya Shah'])
+  })
+})
+
+describe('Role contacts', () => {
+  it('Given a Role, when Contacts are linked to it as each type, then its Role contacts are listed by type, then by Contact name ignoring case', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    for (const [name, type] of [
+      ['Sam Ortiz', 'other'],
+      ['Morgan Lee', 'hiring manager'],
+      ['Priya Shah', 'recruiter'],
+      ['alex Kim', 'recruiter'],
+      ['Jo Park', 'referrer'],
+    ] as const) {
+      const contact = await data.createContact({ name })
+      await data.linkContact({ roleId: role.id, contactId: contact.id, type })
+    }
+
+    expect(
+      (await data.listRoleContacts(role.id)).map(({ type, contact }) => [
+        type,
+        contact.name,
+      ]),
+    ).toEqual([
+      ['referrer', 'Jo Park'],
+      ['recruiter', 'alex Kim'],
+      ['recruiter', 'Priya Shah'],
+      ['hiring manager', 'Morgan Lee'],
+      ['other', 'Sam Ortiz'],
+    ])
+  })
+
+  it('Given a Contact, when it is linked to two Roles, then each Role lists it and the Contact lists both Roles, in the order they were created', async () => {
+    let now = new Date('2026-10-16T09:00:00.000Z')
+    const data = await openTestDataLayer({ clock: () => now })
+    const first = await data.createRole({ title: 'Senior QA Engineer' })
+    now = new Date('2026-10-16T10:00:00.000Z')
+    const second = await data.createRole({ title: 'QA Lead' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+
+    await data.linkContact({
+      roleId: second.id,
+      contactId: priya.id,
+      type: 'referrer',
+    })
+    await data.linkContact({
+      roleId: first.id,
+      contactId: priya.id,
+      type: 'recruiter',
+    })
+
+    for (const role of [first, second]) {
+      expect(
+        (await data.listRoleContacts(role.id)).map((r) => r.contact.name),
+      ).toEqual(['Priya Shah'])
+    }
+    expect(
+      (await data.listRolesOfContact(priya.id)).map(({ type, role }) => [
+        role.title,
+        type,
+      ]),
+    ).toEqual([
+      ['Senior QA Engineer', 'recruiter'],
+      ['QA Lead', 'referrer'],
+    ])
+  })
+
+  it('Given Priya is a recruiter on a Role, when she is linked to it as a recruiter again, then it is rejected; as its hiring manager too, then both are kept', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+    const link = { roleId: role.id, contactId: priya.id } as const
+    await data.linkContact({ ...link, type: 'recruiter' })
+
+    await expect(
+      data.linkContact({ ...link, type: 'recruiter' }),
+    ).rejects.toThrow('Priya Shah is already linked to this Role as recruiter')
+    await data.linkContact({ ...link, type: 'hiring manager' })
+
+    expect((await data.listRoleContacts(role.id)).map((r) => r.type)).toEqual([
+      'recruiter',
+      'hiring manager',
+    ])
+  })
+
+  it('Given no such Role, Contact or type, when a Role contact is made with it, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+
+    await expect(
+      data.linkContact({
+        roleId: 'no-such-role',
+        contactId: priya.id,
+        type: 'recruiter',
+      }),
+    ).rejects.toThrow('No Role with id no-such-role')
+    await expect(
+      data.linkContact({
+        roleId: role.id,
+        contactId: 'no-such-contact',
+        type: 'recruiter',
+      }),
+    ).rejects.toThrow('No Contact with id no-such-contact')
+    await expect(
+      data.linkContact({
+        roleId: role.id,
+        contactId: priya.id,
+        type: 'boss' as RoleContactType,
+      }),
+    ).rejects.toThrow('No Role contact type boss')
+    expect(await data.listRoleContacts(role.id)).toEqual([])
+  })
+
+  it('Given Priya at Acme is a recruiter on a Role, when her Company changes to Globex, then she is still its recruiter', async () => {
+    const data = await openTestDataLayer()
+    const acme = await data.createCompany({ name: 'Acme' })
+    const globex = await data.createCompany({ name: 'Globex' })
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    await data.updateRole(role.id, { companyId: acme.id })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+    await data.updateContact(priya.id, { companyId: acme.id })
+    await data.linkContact({
+      roleId: role.id,
+      contactId: priya.id,
+      type: 'recruiter',
+    })
+
+    await data.updateContact(priya.id, { companyId: globex.id })
+
+    expect(
+      (await data.listRoleContacts(role.id)).map(({ type, contact }) => [
+        type,
+        contact.name,
+        contact.companyId,
+      ]),
+    ).toEqual([['recruiter', 'Priya Shah', globex.id]])
+  })
+
+  it('Given two Role contacts on a Role, when one is unlinked, then only the other is listed and the Contact is kept', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+    const morgan = await data.createContact({ name: 'Morgan Lee' })
+    const recruiter = await data.linkContact({
+      roleId: role.id,
+      contactId: priya.id,
+      type: 'recruiter',
+    })
+    await data.linkContact({
+      roleId: role.id,
+      contactId: morgan.id,
+      type: 'hiring manager',
+    })
+
+    await data.unlinkContact(recruiter.id)
+
+    expect(
+      (await data.listRoleContacts(role.id)).map((r) => r.contact.name),
+    ).toEqual(['Morgan Lee'])
+    expect(await data.getContact(priya.id)).toBeDefined()
+  })
+})
+
+describe('Schema v8', () => {
+  it('Given a Company and Role saved before Contacts existed (schema v7), when the database is opened, then both read back, the Company has no Contacts and the Role has no Role contacts', async () => {
+    const name = uniqueDatabaseName()
+    const v7 = new Dexie(name)
+    v7.version(7).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt, companyId, statusId',
+      statusHistory: 'id, roleId',
+      companies: 'id',
+    })
+    const company = await (
+      await openTestDataLayer()
+    ).createCompany({
+      name: 'Acme',
+    })
+    const role = await (
+      await openTestDataLayer()
+    ).createRole({
+      title: 'Senior QA Engineer',
+    })
+    await v7.table('companies').add(company)
+    await v7.table('roles').add({ ...role, companyId: company.id })
+    v7.close()
+
+    const data = await openTestDataLayer({ name })
+
+    expect(await data.getCompany(company.id)).toEqual(company)
+    expect(await data.getRole(role.id)).toEqual({
+      ...role,
+      companyId: company.id,
+    })
+    expect(await data.listContacts()).toEqual([])
+    expect(await data.listContactsAtCompany(company.id)).toEqual([])
+    expect(await data.listRoleContacts(role.id)).toEqual([])
+  })
+})
+
+describe('Deleting with Contacts', () => {
+  async function priyaOnTwoRoles() {
+    const data = await openTestDataLayer()
+    const acme = await data.createCompany({ name: 'Acme' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+    const morgan = await data.createContact({ name: 'Morgan Lee' })
+    for (const contact of [priya, morgan]) {
+      await data.updateContact(contact.id, { companyId: acme.id })
+    }
+    const first = await data.createRole({ title: 'Senior QA Engineer' })
+    const second = await data.createRole({ title: 'QA Lead' })
+    for (const role of [first, second]) {
+      await data.linkContact({
+        roleId: role.id,
+        contactId: priya.id,
+        type: 'recruiter',
+      })
+    }
+    await data.linkContact({
+      roleId: first.id,
+      contactId: morgan.id,
+      type: 'hiring manager',
+    })
+    return { data, acme, priya, morgan, first, second }
+  }
+
+  it('Given Priya is a recruiter on two Roles, when she is deleted, then she is gone, neither Role lists her and their other Role contacts are kept', async () => {
+    const { data, priya, first, second } = await priyaOnTwoRoles()
+
+    await data.deleteContact(priya.id)
+
+    expect(await data.getContact(priya.id)).toBeUndefined()
+    expect(
+      (await data.listRoleContacts(first.id)).map((r) => r.contact.name),
+    ).toEqual(['Morgan Lee'])
+    expect(await data.listRoleContacts(second.id)).toEqual([])
+    expect(await data.listRolesOfContact(priya.id)).toEqual([])
+  })
+
+  it('Given Acme has Contacts and no Roles, when Acme is deleted, then its Contacts are kept with no Company and keep their Role contacts', async () => {
+    const { data, acme, priya, morgan, first } = await priyaOnTwoRoles()
+
+    await data.deleteCompany(acme.id)
+
+    expect(await data.getCompany(acme.id)).toBeUndefined()
+    for (const contact of [priya, morgan]) {
+      expect((await data.getContact(contact.id))?.companyId).toBeNull()
+    }
+    expect(await data.listContactsAtCompany(acme.id)).toEqual([])
+    expect(
+      (await data.listRoleContacts(first.id)).map((r) => r.contact.name),
+    ).toEqual(['Priya Shah', 'Morgan Lee'])
+  })
+
+  it('Given Acme has Contacts and a Role, when Acme is deleted, then it is blocked and its Contacts stay at Acme', async () => {
+    const { data, acme, first } = await priyaOnTwoRoles()
+    await data.updateRole(first.id, { companyId: acme.id })
+
+    await expect(data.deleteCompany(acme.id)).rejects.toThrow(
+      'Acme still has 1 Role',
+    )
+
+    expect(
+      (await data.listContactsAtCompany(acme.id)).map((c) => c.name),
+    ).toEqual(['Morgan Lee', 'Priya Shah'])
+  })
+
+  it('Given a Role with two Role contacts, when the Role is deleted, then its Role contacts are gone but the Contacts and their other Role contacts are kept', async () => {
+    const { data, priya, morgan, first, second } = await priyaOnTwoRoles()
+
+    await data.deleteRole(first.id)
+
+    expect(await data.listRoleContacts(first.id)).toEqual([])
+    expect(await data.getContact(priya.id)).toBeDefined()
+    expect(await data.getContact(morgan.id)).toBeDefined()
+    expect(await data.listRolesOfContact(morgan.id)).toEqual([])
+    expect(
+      (await data.listRolesOfContact(priya.id)).map((r) => r.role.id),
+    ).toEqual([second.id])
   })
 })

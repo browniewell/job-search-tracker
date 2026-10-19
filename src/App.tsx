@@ -1,6 +1,8 @@
 import { HashRouter, NavLink, Route, Routes } from 'react-router'
 import { CompaniesPage } from './companies/CompaniesPage'
 import { CompanyDetailPage } from './companies/CompanyDetailPage'
+import { ContactDetailPage } from './contacts/ContactDetailPage'
+import { ContactsPage } from './contacts/ContactsPage'
 import type { DataLayer } from './data/dataLayer'
 import { DataLayerContext } from './dataContext'
 import { PipelineBoardPage } from './roles/PipelineBoardPage'
@@ -20,6 +22,7 @@ export function App({ data }: { data: DataLayer }) {
             </NavLink>
             <NavLink to="/board">Pipeline board</NavLink>
             <NavLink to="/companies">Companies</NavLink>
+            <NavLink to="/contacts">Contacts</NavLink>
             <NavLink to="/settings">Settings</NavLink>
           </nav>
         </header>
@@ -32,6 +35,11 @@ export function App({ data }: { data: DataLayer }) {
             <Route
               path="/companies/:companyId"
               element={<CompanyDetailPage />}
+            />
+            <Route path="/contacts" element={<ContactsPage />} />
+            <Route
+              path="/contacts/:contactId"
+              element={<ContactDetailPage />}
             />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

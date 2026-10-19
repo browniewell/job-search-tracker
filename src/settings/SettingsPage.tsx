@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
+import { AddByNameForm } from '../components/AddByNameForm'
 import { ConfirmDelete } from '../components/ConfirmDelete'
 import { FormRow } from '../components/FormRow'
 import { StatusOptions } from '../components/StatusOptions'
@@ -54,7 +55,6 @@ export function SettingsPage() {
   const [statuses, setStatuses] = useState<Status[] | null>(null)
   const [roles, setRoles] = useState<Role[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [newName, setNewName] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -90,13 +90,6 @@ export function SettingsPage() {
     }
     setStatuses(await data.listStatuses())
     return made
-  }
-
-  async function addStatus(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (await saveAndReload(() => data.createStatus({ name: newName }))) {
-      setNewName('')
-    }
   }
 
   // Explains up front why a Status can't be deleted, as the data layer would.
@@ -262,16 +255,11 @@ export function SettingsPage() {
             </li>
           ))}
         </ol>
-        <form className="add-form" onSubmit={addStatus}>
-          <label htmlFor="new-status-name">New Status name</label>
-          <input
-            id="new-status-name"
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            autoComplete="off"
-          />
-          <button type="submit">Add Status</button>
-        </form>
+        <AddByNameForm
+          label="New Status name"
+          buttonLabel="Add Status"
+          onAdd={(name) => saveAndReload(() => data.createStatus({ name }))}
+        />
       </section>
     </section>
   )

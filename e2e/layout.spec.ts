@@ -57,7 +57,7 @@ for (const [device, viewport] of [
   ['phone', { width: 375, height: 812 }],
   ['desktop', { width: 1280, height: 800 }],
 ] as const) {
-  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each, list Roles, open the Pipeline board and configure Statuses, then nothing spills out of its container and axe finds no accessibility problems`, async ({
+  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each, link a Contact to the Role, list Roles, open the Pipeline board and configure Statuses, then nothing spills out of its container and axe finds no accessibility problems`, async ({
     page,
   }) => {
     await page.setViewportSize({
@@ -88,6 +88,45 @@ for (const [device, viewport] of [
     await page.getByRole('button', { name: 'Save' }).click()
     await expect(page.getByRole('note', { name: 'Flags' })).toBeVisible()
     await checkPage(page, 'Role page')
+
+    await page.getByRole('link', { name: 'Contacts', exact: true }).click()
+    await page.getByLabel('Contact name').fill('Priya Shah')
+    await page.getByRole('button', { name: 'Add Contact' }).click()
+    await page.getByRole('link', { name: 'Priya Shah' }).click()
+    await page.getByRole('button', { name: 'Edit' }).click()
+    await page.getByLabel('Title').fill('Senior Technical Recruiter')
+    await page.getByLabel('Company').selectOption({ label: 'Acme' })
+    await page
+      .getByLabel('LinkedIn')
+      .fill('https://www.linkedin.com/in/priya-shah-senior-technical-recruiter')
+    await checkPage(page, 'Contact edit form')
+    await page.getByRole('button', { name: 'Save' }).click()
+    await page.getByRole('link', { name: 'Acme' }).click()
+    await expect(
+      page.getByRole('list', { name: 'Contacts at Acme' }),
+    ).toBeVisible()
+    await checkPage(page, 'Company page with Contacts')
+
+    await page.getByRole('link', { name: 'Senior QA Engineer' }).click()
+    await page
+      .getByLabel('Contact', { exact: true })
+      .selectOption({ label: 'Priya Shah' })
+    await page
+      .getByLabel('Type', { exact: true })
+      .selectOption({ label: 'Hiring manager' })
+    await page.getByRole('button', { name: 'Link Contact' }).click()
+    await expect(
+      page.getByRole('list', { name: 'Hiring manager' }),
+    ).toBeVisible()
+    await checkPage(page, 'Role page with Role contacts')
+    await page.getByRole('link', { name: 'Priya Shah' }).click()
+    await expect(
+      page.getByRole('list', { name: 'Roles with Priya Shah' }),
+    ).toBeVisible()
+    await checkPage(page, 'Contact page')
+    await page.getByRole('link', { name: 'Contacts', exact: true }).click()
+    await expect(page.getByRole('list', { name: 'Contacts' })).toBeVisible()
+    await checkPage(page, 'Contacts list')
 
     await page.goto('/')
     await expect(page.getByRole('table', { name: 'Roles' })).toBeVisible()
