@@ -2,6 +2,10 @@
 
 Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002, and JSX accessibility), Prettier, tsc, the schema tripwire in `src/data/schema.test.ts`, and `e2e/layout.spec.ts`, which checks every page for overflow and runs axe on it in both themes. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
 
+## Code
+
+- **Extend, don't copy.** New code shaped like an existing helper generalises that helper and calls it from both places. Compare the diff with the code already in the repo, not only with itself: `checkStatusNameIsFree` copied `checkCompanyNameIsFree`, and `statusHasRolesMessage` copied the "1 Role, it / N Roles, them" wording of `companyHasRolesMessage`.
+
 ## Stored data
 
 - **Schema changes.** A change to the fields a Role, Company or other stored entity is saved with ships with all of these:
