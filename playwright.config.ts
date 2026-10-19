@@ -4,7 +4,9 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   forbidOnly: !!process.env.CI,
+  // The retry records a trace; a test that only passes on it still fails CI.
   retries: process.env.CI ? 1 : 0,
+  failOnFlakyTests: !!process.env.CI,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: 'http://localhost:4173',
