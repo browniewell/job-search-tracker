@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { App } from '../App'
 import type { DataLayer } from '../data/dataLayer'
-import { openTestDataLayer } from '../test/dataLayers'
+import { fixedClock, openTestDataLayer } from '../test/dataLayers'
 
 async function openSavedSearches(data: DataLayer) {
   const user = userEvent.setup()
@@ -49,8 +49,9 @@ describe('Saved searches page', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('Given a Saved search never checked, when I mark it checked, then it shows the date it was last checked, from the clock', async () => {
-    const data = await openTestDataLayer()
+  it('Given a Saved search never checked, when I mark it checked, then it shows its Last checked date, from the clock', async () => {
+    // 2026-10-16T14:30Z, Oct 16 in the tests' time zone.
+    const data = await openTestDataLayer({ clock: fixedClock })
     await data.createSavedSearch({
       name: 'QA lead',
       link: null,

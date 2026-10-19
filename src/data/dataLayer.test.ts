@@ -1814,7 +1814,7 @@ describe('Deleting with Interviews', () => {
 })
 
 describe('Saved searches', () => {
-  it('Given Saved searches created, then empty fields are null, none has been checked, and they are listed by name, then site, then link, ignoring case', async () => {
+  it('Given no Saved searches, when four are created, then empty fields are null, none has a Last checked time, and they are listed by name, then site, then link, ignoring case', async () => {
     const data = await openTestDataLayer()
 
     const qa = await data.createSavedSearch({
@@ -1855,7 +1855,7 @@ describe('Saved searches', () => {
     ])
   })
 
-  it('Given a Saved search never checked, when it is marked checked, then its last checked time is the clock time, and marking it again moves it to the new time', async () => {
+  it('Given a Saved search never checked, when it is marked checked, then its Last checked time is the clock time, and marking it again moves it to the new time', async () => {
     let now = new Date('2026-10-16T14:30:00.000Z')
     const data = await openTestDataLayer({ clock: () => now })
     const search = await data.createSavedSearch({
@@ -1877,7 +1877,7 @@ describe('Saved searches', () => {
     )
   })
 
-  it('Given a checked Saved search, when its name, link and site are edited, then the edits are kept after the database is reopened, and so is its last checked time', async () => {
+  it('Given a checked Saved search, when its name, link and site are edited, then the edits are kept after the database is reopened, and so is its Last checked time', async () => {
     const name = uniqueDatabaseName()
     const first = await openTestDataLayer({ name })
     const search = await first.createSavedSearch({

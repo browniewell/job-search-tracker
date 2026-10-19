@@ -383,12 +383,12 @@ const byCreatedThenTitle = (a: Role, b: Role) =>
   a.createdAt.localeCompare(b.createdAt) ||
   a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
 
-const byNameIgnoringCase = (a: { name: string }, b: { name: string }) =>
-  a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-
 // Empty text sorts first.
 const byTextIgnoringCase = (a: string | null, b: string | null) =>
   (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
+
+const byNameIgnoringCase = (a: { name: string }, b: { name: string }) =>
+  byTextIgnoringCase(a.name, b.name)
 
 // The same search can be saved on several sites, so site and link break ties.
 const byNameThenSiteThenLink = (a: SavedSearch, b: SavedSearch) =>
