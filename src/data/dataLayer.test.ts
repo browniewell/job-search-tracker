@@ -1,7 +1,7 @@
 import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
 import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
-import type { FitRating } from './dataLayer'
+import type { DataLayer, FitRating } from './dataLayer'
 
 describe('Statuses', () => {
   it('Given a first run, then the default Statuses are seeded in order', async () => {
@@ -9,18 +9,20 @@ describe('Statuses', () => {
 
     const statuses = await data.listStatuses()
 
-    expect(statuses.map((s) => [s.name, s.closed, s.isApplied])).toEqual([
-      ['Interested', false, false],
-      ['Parked', false, false],
-      ['Applied', false, true],
-      ['Recruiter Screen', false, false],
-      ['Interviewing', false, false],
-      ['Offer', false, false],
-      ['Accepted', true, false],
-      ['Rejected', true, false],
-      ['No Response', true, false],
-      ['Withdrawn', true, false],
-      ['Passed', true, false],
+    expect(
+      statuses.map((s) => [s.name, s.closed, s.isApplied, s.isParked]),
+    ).toEqual([
+      ['Interested', false, false, false],
+      ['Parked', false, false, true],
+      ['Applied', false, true, false],
+      ['Recruiter Screen', false, false, false],
+      ['Interviewing', false, false, false],
+      ['Offer', false, false, false],
+      ['Accepted', true, false, false],
+      ['Rejected', true, false, false],
+      ['No Response', true, false, false],
+      ['Withdrawn', true, false, false],
+      ['Passed', true, false, false],
     ])
   })
 
@@ -36,6 +38,203 @@ describe('Statuses', () => {
     expect((await second.listRoles()).map((r) => r.title)).toEqual([
       'Senior QA Engineer',
     ])
+  })
+})
+
+describe('Configuring Statuses', () => {
+  it('Given the default Statuses, when a Status is added with stray spaces, then it is listed last, trimmed, neither Closed nor the Applied status', async () => {
+    const data = await openTestDataLayer()
+
+    await data.createStatus({ name: '  Final Round ' })
+
+    const last = (await data.listStatuses()).at(-1)
+    expect(last).toMatchObject({
+      name: 'Final Round',
+      closed: false,
+      isApplied: false,
+    })
+  })
+
+  it('Given the default Statuses, when a Status is added with a blank name or the name of another ignoring case, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+
+    await expect(data.createStatus({ name: '  ' })).rejects.toThrow(
+      'A Status needs a name',
+    )
+    await expect(data.createStatus({ name: 'applied ' })).rejects.toThrow(
+      'There is already a Status called Applied',
+    )
+    expect(await data.listStatuses()).toHaveLength(11)
+  })
+
+  it('Given a Role moved from Interested to Offer, when Offer is renamed Verbal Offer and marked Closed, then it is listed that way and the Status history still reads Interested → Offer', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const offer = (await data.listStatuses()).find((s) => s.name === 'Offer')!
+    await data.changeStatus(role.id, offer.id)
+
+    await data.updateStatus(offer.id, { name: ' Verbal Offer ', closed: true })
+
+    expect(
+      (await data.listStatuses()).find((s) => s.id === offer.id),
+    ).toMatchObject({ name: 'Verbal Offer', closed: true, order: offer.order })
+    expect(
+      (await data.getStatusHistory(role.id)).map((e) => [
+        e.fromStatusName,
+        e.toStatusName,
+      ]),
+    ).toEqual([
+      [null, 'Interested'],
+      ['Interested', 'Offer'],
+    ])
+  })
+
+  it('Given the default Statuses, when Offer is renamed blank or to "applied", then it is rejected and keeps its name', async () => {
+    const data = await openTestDataLayer()
+    const offer = (await data.listStatuses()).find((s) => s.name === 'Offer')!
+
+    await expect(data.updateStatus(offer.id, { name: ' ' })).rejects.toThrow(
+      'A Status needs a name',
+    )
+    await expect(
+      data.updateStatus(offer.id, { name: 'applied' }),
+    ).rejects.toThrow('There is already a Status called Applied')
+    expect(
+      (await data.listStatuses()).find((s) => s.id === offer.id)?.name,
+    ).toBe('Offer')
+  })
+
+  it('Given Offer, when it is renamed OFFER, then the rename is kept', async () => {
+    const data = await openTestDataLayer()
+    const offer = (await data.listStatuses()).find((s) => s.name === 'Offer')!
+
+    await data.updateStatus(offer.id, { name: 'OFFER' })
+
+    expect(
+      (await data.listStatuses()).find((s) => s.id === offer.id)?.name,
+    ).toBe('OFFER')
+  })
+
+  it('Given the default Statuses, when Passed is moved second and then Interested is moved last, then they are listed in that order after the database is reopened', async () => {
+    const name = uniqueDatabaseName()
+    const data = await openTestDataLayer({ name })
+    const idOf = async (status: string) =>
+      (await data.listStatuses()).find((s) => s.name === status)!.id
+
+    await data.moveStatus(await idOf('Passed'), 1)
+    await data.moveStatus(await idOf('Interested'), 10)
+    data.close()
+
+    const reopened = await openTestDataLayer({ name })
+    expect((await reopened.listStatuses()).map((s) => s.name)).toEqual([
+      'Passed',
+      'Parked',
+      'Applied',
+      'Recruiter Screen',
+      'Interviewing',
+      'Offer',
+      'Accepted',
+      'Rejected',
+      'No Response',
+      'Withdrawn',
+      'Interested',
+    ])
+  })
+})
+
+describe('The Parked status', () => {
+  const parkedNames = async (data: DataLayer) =>
+    (await data.listStatuses()).filter((s) => s.isParked).map((s) => s.name)
+
+  it('Given Parked is the Parked status, when Interested is made the Parked status and then none is, then first Interested is the only one and then there is none', async () => {
+    const data = await openTestDataLayer()
+    const interested = (await data.listStatuses())[0]
+
+    await data.setParkedStatus(interested.id)
+    expect(await parkedNames(data)).toEqual(['Interested'])
+
+    await data.setParkedStatus(null)
+    expect(await parkedNames(data)).toEqual([])
+  })
+
+  it('Given Parked is the Parked status, when no such Status is made the Parked status, then it is rejected and Parked stays the only one', async () => {
+    const data = await openTestDataLayer()
+
+    await expect(data.setParkedStatus('no-such-status')).rejects.toThrow(
+      'No Status with id no-such-status',
+    )
+
+    expect(await parkedNames(data)).toEqual(['Parked'])
+  })
+})
+
+describe('Deleting a Status', () => {
+  it('Given two Roles in Offer, when Offer is deleted, then it is blocked with an explanation and nothing changes', async () => {
+    const data = await openTestDataLayer()
+    const offer = (await data.listStatuses()).find((s) => s.name === 'Offer')!
+    for (const title of ['QA Engineer', 'Senior QA Engineer']) {
+      const role = await data.createRole({ title })
+      await data.changeStatus(role.id, offer.id)
+    }
+
+    await expect(data.deleteStatus(offer.id)).rejects.toThrow(
+      'Offer still has 2 Roles. Move them to another Status first.',
+    )
+    expect((await data.listStatuses()).map((s) => s.id)).toContain(offer.id)
+  })
+
+  it('Given Applied is the Applied status, when it is deleted, then it is blocked with an explanation', async () => {
+    const data = await openTestDataLayer()
+    const applied = (await data.listStatuses()).find((s) => s.isApplied)!
+
+    await expect(data.deleteStatus(applied.id)).rejects.toThrow(
+      'Applied is the Applied status. Choose another Applied status first.',
+    )
+    expect(await data.listStatuses()).toHaveLength(11)
+  })
+
+  it('Given a Role moved from Offer to Accepted, when Offer is deleted, then it is no longer listed and the Status history still reads Interested → Offer → Accepted', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const statuses = await data.listStatuses()
+    const idOf = (name: string) => statuses.find((s) => s.name === name)!.id
+    await data.changeStatus(role.id, idOf('Offer'))
+    await data.changeStatus(role.id, idOf('Accepted'))
+
+    await data.deleteStatus(idOf('Offer'))
+
+    expect((await data.listStatuses()).map((s) => s.name)).not.toContain(
+      'Offer',
+    )
+    expect(
+      (await data.getStatusHistory(role.id)).map((e) => e.toStatusName),
+    ).toEqual(['Interested', 'Offer', 'Accepted'])
+  })
+})
+
+describe('The Applied status', () => {
+  const appliedNames = async (data: DataLayer) =>
+    (await data.listStatuses()).filter((s) => s.isApplied).map((s) => s.name)
+
+  it('Given Applied is the Applied status, when Recruiter Screen is made the Applied status, then it is the only one', async () => {
+    const data = await openTestDataLayer()
+    const screen = (await data.listStatuses()).find(
+      (s) => s.name === 'Recruiter Screen',
+    )!
+
+    await data.setAppliedStatus(screen.id)
+
+    expect(await appliedNames(data)).toEqual(['Recruiter Screen'])
+  })
+
+  it('Given Applied is the Applied status, when no such Status is made the Applied status, then it is rejected and Applied stays the only one', async () => {
+    const data = await openTestDataLayer()
+
+    await expect(data.setAppliedStatus('no-such-status')).rejects.toThrow(
+      'No Status with id no-such-status',
+    )
+
+    expect(await appliedNames(data)).toEqual(['Applied'])
   })
 })
 
@@ -523,6 +722,44 @@ describe('Parked reason', () => {
     expect((await data.getRole(role.id))?.parkedReason).toBe(
       'Relocation required',
     )
+  })
+})
+
+describe('Schema v7', () => {
+  it('Given Statuses saved before the Parked status was flagged (schema v6), when the database is opened, then the Status named Parked is the Parked status and no other is', async () => {
+    const name = uniqueDatabaseName()
+    const v6 = new Dexie(name)
+    v6.version(6).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt, companyId',
+      statusHistory: 'id, roleId',
+      companies: 'id',
+    })
+    const status = (id: string, statusName: string, order: number) => ({
+      id,
+      name: statusName,
+      order,
+      closed: false,
+      isApplied: statusName === 'Applied',
+    })
+    await v6
+      .table('statuses')
+      .bulkAdd([
+        status('status-1', 'Interested', 0),
+        status('status-2', 'Parked', 1),
+        status('status-3', 'Applied', 2),
+      ])
+    v6.close()
+
+    const data = await openTestDataLayer({ name })
+
+    expect(
+      (await data.listStatuses()).map((s) => [s.name, s.isParked]),
+    ).toEqual([
+      ['Interested', false],
+      ['Parked', true],
+      ['Applied', false],
+    ])
   })
 })
 

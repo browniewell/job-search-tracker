@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react'
-import { parkedStatusName, type Role, type Status } from '../data/dataLayer'
+import type { Role, Status } from '../data/dataLayer'
 import { FormRow } from '../components/FormRow'
+import { StatusOptions } from '../components/StatusOptions'
 
 export function ChangeStatusForm({
   role,
@@ -19,7 +20,7 @@ export function ChangeStatusForm({
   const [error, setError] = useState<string | null>(null)
   const idPrefix = useId()
   const parking =
-    statuses.find((status) => status.id === statusId)?.name === parkedStatusName
+    statuses.find((status) => status.id === statusId)?.isParked ?? false
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -51,11 +52,7 @@ export function ChangeStatusForm({
           value={statusId}
           onChange={(event) => setStatusId(event.target.value)}
         >
-          {statuses.map((status) => (
-            <option key={status.id} value={status.id}>
-              {status.name}
-            </option>
-          ))}
+          <StatusOptions statuses={statuses} />
         </select>
       </FormRow>
       {parking && (

@@ -6,6 +6,7 @@ import { DataLayerContext } from './dataContext'
 import { PipelineBoardPage } from './roles/PipelineBoardPage'
 import { RoleDetailPage } from './roles/RoleDetailPage'
 import { RolesPage } from './roles/RolesPage'
+import { SettingsPage } from './settings/SettingsPage'
 
 export function App({ data }: { data: DataLayer }) {
   return (
@@ -19,6 +20,7 @@ export function App({ data }: { data: DataLayer }) {
             </NavLink>
             <NavLink to="/board">Pipeline board</NavLink>
             <NavLink to="/companies">Companies</NavLink>
+            <NavLink to="/settings">Settings</NavLink>
           </nav>
         </header>
         <main>
@@ -31,6 +33,7 @@ export function App({ data }: { data: DataLayer }) {
               path="/companies/:companyId"
               element={<CompanyDetailPage />}
             />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
       </HashRouter>

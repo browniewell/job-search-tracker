@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import {
   flagsShownOnRole,
-  parkedStatusName,
   type Company,
   type Role,
   type RoleFields,
@@ -65,8 +64,8 @@ export function RoleDetailPage() {
       </section>
     )
   }
-  const statusName =
-    statuses.find((status) => status.id === role.statusId)?.name ?? 'Unknown'
+  const status = statuses.find((s) => s.id === role.statusId)
+  const statusName = status?.name ?? 'Unknown'
   const company = companies.find((c) => c.id === role.companyId)
 
   async function save(fields: RoleFields) {
@@ -147,7 +146,7 @@ export function RoleDetailPage() {
             role={role}
             company={company}
             statusName={statusName}
-            parked={statusName === parkedStatusName}
+            parked={status?.isParked ?? false}
           />
           <StatusTimeline entries={history} />
         </>
