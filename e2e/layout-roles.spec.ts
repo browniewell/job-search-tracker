@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { checkPage, fontScale, layoutTest, overflowing } from './layout.ts'
+import { checkPage, overflowing, setWidth, widths } from './layout.ts'
 import {
   addCompany,
   addContact,
@@ -19,10 +19,13 @@ async function fillInterviewForm(page: Page, notes: string) {
   await page.getByLabel('Notes').fill(notes)
 }
 
-layoutTest(
-  'a Flagged Role at a Flagged Company',
-  'I edit the Role, link a Contact to it, log an Interview and list Roles',
-  async (page) => {
+test.describe.configure({ mode: 'parallel' })
+
+for (const width of widths) {
+  test(`Given a Flagged Role at a Flagged Company on a ${width.device}, when I edit the Role, link a Contact to it, log an Interview and list Roles, then nothing spills out of its container and axe finds no accessibility problems`, async ({
+    page,
+  }) => {
+    await setWidth(page, width)
     await addCompany(page, 'Acme', 'data monetization')
     await addContact(page, 'Priya Shah')
     await addRole(page, 'Senior QA Engineer')
@@ -53,8 +56,8 @@ layoutTest(
     await page.goto('/')
     await expect(page.getByRole('table', { name: 'Roles' })).toBeVisible()
     await checkPage(page, 'Roles table')
-  },
-)
+  })
+}
 
 // Text kept as written wraps differently at every width, and a space that
 // hangs past the edge shows at only some of them (#11): three widths miss it.
@@ -79,10 +82,7 @@ test('Given a Role whose Notes, Posting copy and Interview notes run several lin
 
   const spills: string[] = []
   for (let width = 300; width <= 420; width++) {
-    await page.setViewportSize({
-      width: Math.round(width * fontScale),
-      height: 640,
-    })
+    await setWidth(page, { width, height: 640 })
     for (const found of await overflowing(page, '.multiline')) {
       spills.push(`${width}px: ${found}`)
     }

@@ -1,8 +1,10 @@
 import { AxeBuilder } from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 // Shared by the layout-*.spec.ts files, one per area, so a ticket that
-// touches one area edits, and repeats on CI, only that area's spec.
+// touches one area edits, and repeats on CI, only that area's spec. Each spec
+// calls test() itself: --only-changed picks tests by the file that defines
+// them, so a test defined here would never count as changed.
 
 /**
  * Elements that spill out of their container: a layout bug no unit test
@@ -58,34 +60,18 @@ export async function checkPage(page: Page, name: string) {
 // CI's Linux fonts run about 17% wider than macOS's: 320 locally lays out
 // like 375 on CI. Locally each width shrinks by that much, so a layout that
 // only just fits here fails here, not first on CI.
-export const fontScale = process.env.CI ? 1 : 320 / 375
+const fontScale = process.env.CI ? 1 : 320 / 375
 
 export const widths = [
-  ['small phone', { width: 320, height: 640 }],
-  ['phone', { width: 375, height: 812 }],
-  ['desktop', { width: 1280, height: 800 }],
+  { device: 'small phone', width: 320, height: 640 },
+  { device: 'phone', width: 375, height: 812 },
+  { device: 'desktop', width: 1280, height: 800 },
 ] as const
 
-/**
- * One test per width, run in parallel. `given` and `when` complete the
- * Given/When/Then name; the body seeds its data and calls checkPage on each
- * page it reaches.
- */
-export function layoutTest(
-  given: string,
-  when: string,
-  body: (page: Page) => Promise<void>,
+/** Sizes the page to a width, scaled by fontScale. */
+export async function setWidth(
+  page: Page,
+  { width, height }: { width: number; height: number },
 ) {
-  test.describe.configure({ mode: 'parallel' })
-  for (const [device, viewport] of widths) {
-    test(`Given ${given} on a ${device}, when ${when}, then nothing spills out of its container and axe finds no accessibility problems`, async ({
-      page,
-    }) => {
-      await page.setViewportSize({
-        width: Math.round(viewport.width * fontScale),
-        height: viewport.height,
-      })
-      await body(page)
-    })
-  }
+  await page.setViewportSize({ width: Math.round(width * fontScale), height })
 }

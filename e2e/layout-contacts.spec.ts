@@ -1,11 +1,14 @@
-import { expect } from '@playwright/test'
-import { checkPage, layoutTest } from './layout.ts'
+import { expect, test } from '@playwright/test'
+import { checkPage, setWidth, widths } from './layout.ts'
 import { addCompany, addContact, addRole, linkHiringManager } from './seed.ts'
 
-layoutTest(
-  'a Contact at a Company, linked to a Role',
-  'I edit the Contact, view it and list Contacts',
-  async (page) => {
+test.describe.configure({ mode: 'parallel' })
+
+for (const width of widths) {
+  test(`Given a Contact at a Company, linked to a Role on a ${width.device}, when I edit the Contact, view it and list Contacts, then nothing spills out of its container and axe finds no accessibility problems`, async ({
+    page,
+  }) => {
+    await setWidth(page, width)
     await addCompany(page, 'Acme')
     await addContact(page, 'Priya Shah')
     await page.getByRole('link', { name: 'Priya Shah' }).click()
@@ -32,5 +35,5 @@ layoutTest(
     await page.getByRole('link', { name: 'Contacts', exact: true }).click()
     await expect(page.getByRole('list', { name: 'Contacts' })).toBeVisible()
     await checkPage(page, 'Contacts list')
-  },
-)
+  })
+}
