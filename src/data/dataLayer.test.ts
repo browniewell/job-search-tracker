@@ -88,6 +88,19 @@ describe('Roles', () => {
 
     expect((await data.listRoles()).map((r) => r.title)).toEqual(titles)
   })
+
+  it('Given Roles created at the same moment, then they are listed by Role title, ignoring case', async () => {
+    const data = await openTestDataLayer()
+    for (const title of ['QA Engineer', 'SDET', 'test Lead']) {
+      await data.createRole({ title })
+    }
+
+    expect((await data.listRoles()).map((r) => r.title)).toEqual([
+      'QA Engineer',
+      'SDET',
+      'test Lead',
+    ])
+  })
 })
 
 describe('Role fields', () => {
@@ -782,5 +795,24 @@ describe('Deleting a Company', () => {
 
     expect(await data.getCompany(acme.id)).toBeUndefined()
     expect(await data.listRoles()).toHaveLength(1)
+  })
+})
+
+describe('Next action due', () => {
+  // 10pm on Oct 16 in Chicago, where tests run: already Oct 17 in UTC.
+  const lateOnOct16 = () => new Date('2026-10-17T03:00:00.000Z')
+
+  it('Given Roles with Next action dates before, on and after the local calendar day, then only those on or before it are due', async () => {
+    const data = await openTestDataLayer({ clock: lateOnOct16 })
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const dated = (nextActionDate: string | null) => ({
+      ...role,
+      nextActionDate,
+    })
+
+    expect(data.isNextActionDue(dated('2026-10-15'))).toBe(true)
+    expect(data.isNextActionDue(dated('2026-10-16'))).toBe(true)
+    expect(data.isNextActionDue(dated('2026-10-17'))).toBe(false)
+    expect(data.isNextActionDue(dated(null))).toBe(false)
   })
 })

@@ -6,8 +6,8 @@ import {
 } from '../components/Fields'
 import { Link } from 'react-router'
 import type { Company, Role } from '../data/dataLayer'
+import { CompanyNotDisclosed } from './CompanyNotDisclosed'
 import {
-  companyNotDisclosed,
   formatCalendarDate,
   formatPostedSalary,
   formatTimestampDate,
@@ -33,7 +33,7 @@ export function RoleFieldsView({
           {company ? (
             <Link to={`/companies/${company.id}`}>{company.name}</Link>
           ) : (
-            <span className="not-set">{companyNotDisclosed}</span>
+            <CompanyNotDisclosed />
           )}
         </Field>
         <Field label="Status">{statusName}</Field>

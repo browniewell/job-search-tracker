@@ -23,6 +23,7 @@ import {
   type Status,
   type WorkArrangement,
 } from '../data/dataLayer'
+import { CompanyNotDisclosed } from './CompanyNotDisclosed'
 import {
   companyNotDisclosed,
   formatCalendarDate,
@@ -91,10 +92,7 @@ const columns = helper.columns([
     sortUndefined: 'last',
     filterFn: (row, _columnId, companyId: string) =>
       (row.original.role.companyId ?? noCompany) === companyId,
-    cell: ({ row }) =>
-      row.original.company?.name ?? (
-        <span className="not-set">{companyNotDisclosed}</span>
-      ),
+    cell: ({ row }) => row.original.company?.name ?? <CompanyNotDisclosed />,
   }),
   // Statuses sort in pipeline order, not by name.
   helper.accessor((row) => row.status?.order, {
@@ -239,10 +237,6 @@ const ariaSort = {
   none: undefined,
 } as const
 
-const byAddedThenTitle = (a: Role, b: Role) =>
-  a.createdAt.localeCompare(b.createdAt) ||
-  a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
-
 export function RolesTable({
   roles,
   companies,
@@ -252,11 +246,10 @@ export function RolesTable({
   companies: Company[]
   statuses: Status[]
 }) {
-  // Until a column is sorted: the order Roles were added, then by title, as
-  // Roles added together share a timestamp.
+  // Until a column is sorted: the order Roles are listed in.
   const data = useMemo(
     () =>
-      roles.toSorted(byAddedThenTitle).map((role): RoleRow => {
+      roles.map((role): RoleRow => {
         const company = companies.find((c) => c.id === role.companyId)
         return {
           role,
