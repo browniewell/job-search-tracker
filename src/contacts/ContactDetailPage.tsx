@@ -101,8 +101,8 @@ export function ContactDetailPage() {
               onConfirm={deleteContact}
               onCancel={() => setMode('view')}
             >
-              “{contact.name}” will be deleted and taken off every Role. This
-              can’t be undone.
+              “{contact.name}” will be deleted and taken off every Role and
+              Interview. This can’t be undone.
             </ConfirmDelete>
           )}
           <section aria-label="Contact fields" className="detail-fields">

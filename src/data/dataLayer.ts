@@ -99,6 +99,42 @@ export type LinkedRole = RoleContact & { role: Role }
 const byRoleContactType = (a: RoleContact, b: RoleContact) =>
   roleContactTypes.indexOf(a.type) - roleContactTypes.indexOf(b.type)
 
+/** The kinds of Interview, in the order a form offers them. */
+export const interviewTypes = [
+  'recruiter screen',
+  'hiring manager',
+  'technical',
+  'panel',
+  'other',
+] as const
+export type InterviewType = (typeof interviewTypes)[number]
+
+/** The fields of an Interview you can edit directly. Empty fields are null. */
+export interface InterviewFields {
+  /** Local date and time as picked, YYYY-MM-DDTHH:mm: no time zone. */
+  at: string
+  type: InterviewType
+  /** The Interviewers: Contacts, each once. */
+  interviewerIds: string[]
+  notes: string | null
+  /** Whether you have sent a Follow-up. */
+  followUpSent: boolean
+}
+
+export interface Interview extends InterviewFields {
+  id: string
+  roleId: string
+}
+
+/** An Interview with its Interviewers, by name ignoring case, as a Role lists it. */
+export type ListedInterview = Interview & { interviewers: Contact[] }
+
+// Interviews at the same moment fall back on type, not on their random ids:
+// a Role has one Interview of each type at a time.
+const byTimeThenType = (a: Interview, b: Interview) =>
+  a.at.localeCompare(b.at) ||
+  interviewTypes.indexOf(a.type) - interviewTypes.indexOf(b.type)
+
 export type WorkArrangement = 'on-site' | 'hybrid' | 'remote'
 export type SalaryPeriod = 'annual' | 'hourly'
 export type FitRating = 1 | 2 | 3 | 4 | 5
@@ -280,6 +316,15 @@ function checkFitRating(fitRating: FitRating | null): void {
   }
 }
 
+/** An error unless the value is one of a fixed list, such as the Interview types. */
+function checkIsOneOf(
+  value: string,
+  allowed: readonly string[],
+  what: string,
+): void {
+  if (!allowed.includes(value)) throw new Error(`No ${what} ${value}`)
+}
+
 /** A count and its noun, with the pronoun that stands for them: "1 Role", "it". */
 function counted(count: number, noun: string): [string, string] {
   return count === 1 ? [`1 ${noun}`, 'it'] : [`${count} ${noun}s`, 'them']
@@ -329,6 +374,7 @@ type Database = Dexie & {
   companies: EntityTable<Company, 'id'>
   contacts: EntityTable<Contact, 'id'>
   roleContacts: EntityTable<RoleContact, 'id'>
+  interviews: EntityTable<Interview, 'id'>
 }
 
 export interface DataLayer {
@@ -338,8 +384,8 @@ export interface DataLayer {
   getRole(id: string): Promise<Role | undefined>
   updateRole(id: string, changes: Partial<RoleFields>): Promise<Role>
   /**
-   * Deletes the Role and everything that belongs to it, its Status history
-   * and Role contacts, in one transaction. Its Contacts are kept.
+   * Deletes the Role and everything that belongs to it, its Status history,
+   * Role contacts and Interviews, in one transaction. Its Contacts are kept.
    */
   deleteRole(id: string): Promise<void>
   /**
@@ -368,7 +414,10 @@ export interface DataLayer {
   listContacts(): Promise<Contact[]>
   getContact(id: string): Promise<Contact | undefined>
   updateContact(id: string, changes: Partial<ContactFields>): Promise<Contact>
-  /** Deletes the Contact and its Role contacts, in one transaction. */
+  /**
+   * Deletes the Contact and its Role contacts, and takes it off every
+   * Interview, in one transaction. The Interviews are kept.
+   */
   deleteContact(id: string): Promise<void>
   /** The Contacts currently at a Company, by name ignoring case. */
   listContactsAtCompany(companyId: string): Promise<Contact[]>
@@ -379,6 +428,26 @@ export interface DataLayer {
   listRoleContacts(roleId: string): Promise<LinkedContact[]>
   /** The Role contacts of a Contact, by their Roles in the order added, then Role title. */
   listRolesOfContact(contactId: string): Promise<LinkedRole[]>
+  /**
+   * Logs an Interview for a Role, one of each type at a time. Never changes
+   * the Role's Status.
+   */
+  createInterview(
+    input: { roleId: string } & InterviewFields,
+  ): Promise<Interview>
+  updateInterview(
+    id: string,
+    changes: Partial<InterviewFields>,
+  ): Promise<Interview>
+  /** Deletes the Interview. Its Interviewers are kept as Contacts. */
+  deleteInterview(id: string): Promise<void>
+  /** A Role's Interviews, by date and time, then by type in `interviewTypes` order. */
+  listInterviews(roleId: string): Promise<ListedInterview[]>
+  /**
+   * The Contacts on any of a Role's Interviews, each once, by name ignoring
+   * case. Interviewers are known only through Interviews.
+   */
+  listInterviewers(roleId: string): Promise<Contact[]>
   /** Every Status, in the order chosen for them. */
   listStatuses(): Promise<Status[]>
   /** Adds a Status at the end of the list, neither Closed nor Applied. */
@@ -484,6 +553,8 @@ export async function openDataLayer(options: {
     contacts: 'id, companyId',
     roleContacts: 'id, roleId, contactId',
   })
+  // v9 adds Interviews, indexed by Interviewer to take a deleted Contact off them.
+  db.version(9).stores({ interviews: 'id, roleId, *interviewerIds' })
   db.on('populate', (tx) => {
     tx.table('statuses').bulkAdd(
       defaultStatuses.map((status, order) => ({
@@ -524,6 +595,61 @@ export async function openDataLayer(options: {
       .first()
     if (taken) {
       throw new Error(`There is already a Status called ${taken.name}`)
+    }
+  }
+
+  async function checkRoleExists(roleId: string) {
+    if (!(await db.roles.get(roleId))) {
+      throw new Error(`No Role with id ${roleId}`)
+    }
+  }
+
+  /** The Contacts with these ids, in the same order; an error if any is missing. */
+  async function existingContacts(contactIds: string[]): Promise<Contact[]> {
+    const contacts = await db.contacts.bulkGet(contactIds)
+    const missing = contactIds.find((_, i) => contacts[i] === undefined)
+    if (missing !== undefined) throw new Error(`No Contact with id ${missing}`)
+    return contacts as Contact[]
+  }
+
+  /** The Contacts with these ids that still exist, by name ignoring case. */
+  async function contactsByName(contactIds: string[]): Promise<Contact[]> {
+    return (await db.contacts.bulkGet(contactIds))
+      .filter((contact) => contact !== undefined)
+      .sort(byNameIgnoringCase)
+  }
+
+  // An Interview as it is saved: checked, with each Interviewer once. A Role
+  // has one Interview of each type at a time, so its Interviews' order is
+  // fully chosen.
+  async function checkedInterview(interview: Interview): Promise<Interview> {
+    await checkRoleExists(interview.roleId)
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(interview.at)) {
+      throw new Error('An Interview needs a date and time')
+    }
+    if (!interview.type) throw new Error('An Interview needs a type')
+    checkIsOneOf(interview.type, interviewTypes, 'Interview type')
+    const repeated = await db.interviews
+      .where('roleId')
+      .equals(interview.roleId)
+      .filter(
+        (other) =>
+          other.id !== interview.id &&
+          other.at === interview.at &&
+          other.type === interview.type,
+      )
+      .first()
+    if (repeated) {
+      throw new Error(
+        `There is already a ${interview.type} Interview at that time`,
+      )
+    }
+    const interviewerIds = [...new Set(interview.interviewerIds)]
+    await existingContacts(interviewerIds)
+    return {
+      ...interview,
+      interviewerIds,
+      notes: interview.notes?.trim() || null,
     }
   }
 
@@ -598,9 +724,11 @@ export async function openDataLayer(options: {
         db.roles,
         db.statusHistory,
         db.roleContacts,
+        db.interviews,
         async () => {
           await db.statusHistory.where('roleId').equals(id).delete()
           await db.roleContacts.where('roleId').equals(id).delete()
+          await db.interviews.where('roleId').equals(id).delete()
           await db.roles.delete(id)
         },
       ),
@@ -669,24 +797,33 @@ export async function openDataLayer(options: {
         return updated
       }),
     deleteContact: (id) =>
-      db.transaction('rw', db.contacts, db.roleContacts, async () => {
-        await db.roleContacts.where('contactId').equals(id).delete()
-        await db.contacts.delete(id)
-      }),
+      db.transaction(
+        'rw',
+        db.contacts,
+        db.roleContacts,
+        db.interviews,
+        async () => {
+          await db.roleContacts.where('contactId').equals(id).delete()
+          await db.interviews
+            .where('interviewerIds')
+            .equals(id)
+            .modify((interview) => {
+              interview.interviewerIds = interview.interviewerIds.filter(
+                (interviewerId) => interviewerId !== id,
+              )
+            })
+          await db.contacts.delete(id)
+        },
+      ),
     listContactsAtCompany: async (companyId) =>
       (await db.contacts.where('companyId').equals(companyId).toArray()).sort(
         byNameIgnoringCase,
       ),
     linkContact: ({ roleId, contactId, type }) =>
       db.transaction('rw', db.roles, db.contacts, db.roleContacts, async () => {
-        if (!(await db.roles.get(roleId))) {
-          throw new Error(`No Role with id ${roleId}`)
-        }
-        const contact = await db.contacts.get(contactId)
-        if (!contact) throw new Error(`No Contact with id ${contactId}`)
-        if (!roleContactTypes.includes(type)) {
-          throw new Error(`No Role contact type ${type}`)
-        }
+        await checkRoleExists(roleId)
+        const [contact] = await existingContacts([contactId])
+        checkIsOneOf(type, roleContactTypes, 'Role contact type')
         const repeated = await db.roleContacts
           .where('roleId')
           .equals(roleId)
@@ -737,6 +874,47 @@ export async function openDataLayer(options: {
             (a, b) =>
               byCreatedThenTitle(a.role, b.role) || byRoleContactType(a, b),
           )
+      }),
+    createInterview: ({ roleId, ...fields }) =>
+      db.transaction('rw', db.roles, db.contacts, db.interviews, async () => {
+        const interview = await checkedInterview({
+          id: newId(),
+          roleId,
+          ...fields,
+        })
+        await db.interviews.add(interview)
+        return interview
+      }),
+    updateInterview: (id, changes) =>
+      db.transaction('rw', db.roles, db.contacts, db.interviews, async () => {
+        const interview = await db.interviews.get(id)
+        if (!interview) throw new Error(`No Interview with id ${id}`)
+        const updated = await checkedInterview({ ...interview, ...changes })
+        await db.interviews.put(updated)
+        return updated
+      }),
+    deleteInterview: (id) => db.interviews.delete(id),
+    listInterviews: (roleId) =>
+      db.transaction('r', db.contacts, db.interviews, async () => {
+        const interviews = await db.interviews
+          .where('roleId')
+          .equals(roleId)
+          .toArray()
+        return Promise.all(
+          interviews.sort(byTimeThenType).map(async (interview) => ({
+            ...interview,
+            interviewers: await contactsByName(interview.interviewerIds),
+          })),
+        )
+      }),
+    listInterviewers: (roleId) =>
+      db.transaction('r', db.contacts, db.interviews, async () => {
+        const interviews = await db.interviews
+          .where('roleId')
+          .equals(roleId)
+          .toArray()
+        const ids = new Set(interviews.flatMap((i) => i.interviewerIds))
+        return contactsByName([...ids])
       }),
     changeStatus: (roleId, statusId, changes = {}) =>
       db.transaction(

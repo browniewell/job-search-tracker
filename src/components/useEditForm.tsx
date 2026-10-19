@@ -1,10 +1,17 @@
 import { useId, useState, type FormEvent } from 'react'
+import { CheckboxRow } from './CheckboxRow'
 import { FormRow } from './FormRow'
 import { errorMessage as messageOf } from '../errorMessage'
 
 /** The fields of a form's values that are held as text. */
 type TextField<V> = {
   [K in keyof V]: V[K] extends string ? K : never
+}[keyof V] &
+  string
+
+/** The fields of a form's values that are held as booleans. */
+type BooleanField<V> = {
+  [K in keyof V]: V[K] extends boolean ? K : never
 }[keyof V] &
   string
 
@@ -93,6 +100,15 @@ export function useEditForm<V extends object>(
     </FormRow>
   )
 
+  const checkbox = (field: BooleanField<V>, label: string) => (
+    <CheckboxRow
+      id={idFor(field)}
+      label={label}
+      checked={values[field] as boolean}
+      onChange={(checked) => set(field, checked as V[BooleanField<V>])}
+    />
+  )
+
   const errorMessage = error && (
     <p role="alert" className="form-error">
       {error}
@@ -108,5 +124,6 @@ export function useEditForm<V extends object>(
     textInput,
     textArea,
     select,
+    checkbox,
   }
 }
