@@ -251,8 +251,10 @@ button.danger {
   color: var(--muted);
 }
 
+/* Text kept exactly as written. Under pre-wrap a space at a line's end
+   hangs past the container at some widths; break-spaces wraps it instead. */
 .multiline {
-  white-space: pre-wrap;
+  white-space: break-spaces;
 }
 
 .change-status {
