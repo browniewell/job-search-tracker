@@ -29,7 +29,19 @@ jobs:
       # loaded) fails here rather than weeks later.
       - run: npx vitest run --changed origin/main --repeats 5 --passWithNoTests
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      # Browsers are cached per Playwright version; a hit still needs the
+      # system libraries, which live outside the cache.
+      - id: playwright-version
+        run: echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       # Playwright serves the dist/ built above.
       - run: npm run test:e2e
       # New or changed specs run again, repeatedly and in parallel, so a test
