@@ -15,7 +15,7 @@ import type {
 } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 import { ContactForm } from './ContactForm'
-import { roleContactTypeLabels } from './format'
+import { roleContactTypeLabels } from '../format'
 
 type Loaded = {
   contact: Contact | undefined

@@ -1,3 +1,5 @@
+import type { RoleContactType } from './data/dataLayer'
+
 // Dates and money are shown US-style: the spec assumes USD.
 export const locale = 'en-US'
 
@@ -34,4 +36,12 @@ export function formatTimestampDate(timestamp: string): string {
 /** A local date and time (YYYY-MM-DDTHH:mm), shown as written: no time zone shift. */
 export function formatLocalDateTime(dateTime: string): string {
   return mediumDateTime.format(localMoment(dateTime))
+}
+
+/** How a Role contact's type is shown, on both a Role and a Contact. */
+export const roleContactTypeLabels: Record<RoleContactType, string> = {
+  referrer: 'Referrer',
+  recruiter: 'Recruiter',
+  'hiring manager': 'Hiring manager',
+  other: 'Other',
 }

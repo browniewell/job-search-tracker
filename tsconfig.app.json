@@ -18,6 +18,9 @@
 
     /* Linting */
     "strict": true,
+    /* An optional field is left out, never set to undefined: spreading
+       { link: undefined } over a record would otherwise wipe it. */
+    "exactOptionalPropertyTypes": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,

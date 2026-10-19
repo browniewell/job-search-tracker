@@ -1,6 +1,6 @@
 # Coding standards
 
-Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002, copies of `errorMessage`, and JSX accessibility), Prettier, tsc, the schema tripwire in `src/data/schema.test.ts`, and the `e2e/layout-*.spec.ts` files, one per area, which check every page for overflow and run axe on it in both themes. A new page's checks go in its area's file, using the helpers in `e2e/layout.ts`. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
+Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002, imports from another area, copies of `errorMessage`, and JSX accessibility), Prettier, tsc (including `exactOptionalPropertyTypes`, so a partial edit can't overwrite a field with `undefined`), the schema tripwire in `src/data/schema.test.ts`, and the `e2e/layout-*.spec.ts` files, one per area, which check every page for overflow and run axe on it in both themes. A new page's checks go in its area's file, using the helpers in `e2e/layout.ts`. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
 
 ## Code
 
@@ -23,12 +23,12 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 ## Tests
 
 - **Two seams only:** the data-layer interface, and the rendered `<App>` over the real data layer on fake-indexeddb. Playwright covers flows that need a real browser. Tests use our own modules for real, never mocked.
-- **Given/When/Then names in glossary terms**, stating behaviour a user would recognise.
+- **Given/When/Then names in glossary terms**, stating behaviour a user would recognise. A test of state that is simply there, such as seeded Statuses or a list's order, is named Given/Then: the When is the action under test, and such a test has none.
 - **Red first.** A test that passed on its first run (a tripwire, an upgrade written before its test) is backed by a check: break the code, see the test fail, restore it. Note it in the PR's evidence.
 
 ## UI
 
 - **Glossary terms in UI copy**, matching `GLOSSARY.md` exactly ("Role title", "Company not disclosed"). A new domain concept gets its glossary entry in the same PR; plain-English fields such as "industry" don't need one.
 - **Copy used in more than one place is one constant.** Field labels are the exception: a field's edit form and its read-only view each write the label, and `GLOSSARY.md` keeps them in step.
-- **Shared building blocks live in `src/components`** (field lists, form rows, delete confirmation). Pages live under their area, such as `src/roles` or `src/companies`. A second page needing a piece is the cue to move it to `src/components`.
+- **Shared building blocks live in `src/components`** (field lists, form rows, delete confirmation). Pages live under their area, such as `src/roles` or `src/companies`. A second page needing a piece is the cue to move it to `src/components`, or to `src/format.ts` for display formatting, in the same PR.
 - **Links from stored data render through `ExternalLink`**, which shows anything that isn't http(s) as text.
