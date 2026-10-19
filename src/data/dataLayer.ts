@@ -47,6 +47,49 @@ const emptyCompany: Omit<CompanyFields, 'name'> = {
   notes: null,
 }
 
+/** The fields of a Contact you can edit directly. Empty fields are null. */
+export interface ContactFields {
+  name: string
+  /** The Contact's job title, e.g. "Senior Technical Recruiter". */
+  title: string | null
+  /** Their current Company, if known. */
+  companyId: string | null
+  howYouKnow: string | null
+  email: string | null
+  linkedIn: string | null
+  notes: string | null
+}
+
+export interface Contact extends ContactFields {
+  id: string
+}
+
+const emptyContact: Omit<ContactFields, 'name'> = {
+  title: null,
+  companyId: null,
+  howYouKnow: null,
+  email: null,
+  linkedIn: null,
+  notes: null,
+}
+
+/** How a Contact is involved in a Role, in the order a Role lists them. */
+export const roleContactTypes = [
+  'referrer',
+  'recruiter',
+  'hiring manager',
+  'other',
+] as const
+export type RoleContactType = (typeof roleContactTypes)[number]
+
+/** A link between a Contact and a Role. */
+export interface RoleContact {
+  id: string
+  roleId: string
+  contactId: string
+  type: RoleContactType
+}
+
 export type WorkArrangement = 'on-site' | 'hybrid' | 'remote'
 export type SalaryPeriod = 'annual' | 'hourly'
 export type FitRating = 1 | 2 | 3 | 4 | 5
@@ -164,23 +207,21 @@ function localCalendarDate(moment: Date): string {
   return `${moment.getFullYear()}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())}`
 }
 
-function requireTitle(title: string): string {
-  const trimmed = title.trim()
-  if (!trimmed) throw new Error('A Role needs a title')
+/** The text trimmed, or an error with the given message when it is blank. */
+function requireText(text: string, blankMessage: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) throw new Error(blankMessage)
   return trimmed
 }
 
-function requireStatusName(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) throw new Error('A Status needs a name')
-  return trimmed
-}
-
-function requireCompanyName(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) throw new Error('A Company needs a name')
-  return trimmed
-}
+const requireTitle = (title: string) =>
+  requireText(title, 'A Role needs a title')
+const requireStatusName = (name: string) =>
+  requireText(name, 'A Status needs a name')
+const requireCompanyName = (name: string) =>
+  requireText(name, 'A Company needs a name')
+const requireContactName = (name: string) =>
+  requireText(name, 'A Contact needs a name')
 
 const flagKey = (flag: string) => flag.trim().toLocaleLowerCase()
 
@@ -255,6 +296,11 @@ export function appliedStatusDeleteMessage(statusName: string): string {
   return `${statusName} is the Applied status. Choose another Applied status first.`
 }
 
+// Roles added together share a timestamp, so title breaks the tie.
+const byCreatedThenTitle = (a: Role, b: Role) =>
+  a.createdAt.localeCompare(b.createdAt) ||
+  a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+
 const byNameIgnoringCase = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
 
@@ -263,6 +309,8 @@ type Database = Dexie & {
   roles: EntityTable<Role, 'id'>
   statusHistory: EntityTable<StatusHistoryEntry, 'id'>
   companies: EntityTable<Company, 'id'>
+  contacts: EntityTable<Contact, 'id'>
+  roleContacts: EntityTable<RoleContact, 'id'>
 }
 
 export interface DataLayer {
@@ -271,7 +319,10 @@ export interface DataLayer {
   listRoles(): Promise<Role[]>
   getRole(id: string): Promise<Role | undefined>
   updateRole(id: string, changes: Partial<RoleFields>): Promise<Role>
-  /** Deletes the Role and everything that belongs to it, in one transaction. */
+  /**
+   * Deletes the Role and everything that belongs to it, its Status history
+   * and Role contacts, in one transaction. Its Contacts are kept.
+   */
   deleteRole(id: string): Promise<void>
   /**
    * Moves the Role to another Status and records the change in its Status
@@ -290,10 +341,30 @@ export interface DataLayer {
   listCompanies(): Promise<Company[]>
   getCompany(id: string): Promise<Company | undefined>
   updateCompany(id: string, changes: Partial<CompanyFields>): Promise<Company>
-  /** Blocked while any Role is linked to the Company. */
+  /** Blocked while any Role is linked to the Company. Its Contacts are kept, at no Company. */
   deleteCompany(id: string): Promise<void>
   /** The Roles linked to a Company, in the order they were created. */
   listRolesAtCompany(companyId: string): Promise<Role[]>
+  createContact(input: { name: string }): Promise<Contact>
+  /** Every Contact, by name ignoring case. */
+  listContacts(): Promise<Contact[]>
+  getContact(id: string): Promise<Contact | undefined>
+  updateContact(id: string, changes: Partial<ContactFields>): Promise<Contact>
+  /** Deletes the Contact and its Role contacts, in one transaction. */
+  deleteContact(id: string): Promise<void>
+  /** The Contacts currently at a Company, by name ignoring case. */
+  listContactsAtCompany(companyId: string): Promise<Contact[]>
+  /** Links a Contact to a Role as one type; each type once per Contact and Role. */
+  linkContact(input: Omit<RoleContact, 'id'>): Promise<RoleContact>
+  unlinkContact(roleContactId: string): Promise<void>
+  /** A Role's Role contacts, by type in `roleContactTypes` order, then by name ignoring case. */
+  listRoleContacts(
+    roleId: string,
+  ): Promise<Array<RoleContact & { contact: Contact }>>
+  /** The Role contacts of a Contact, by their Roles in the order added, then Role title. */
+  listRolesOfContact(
+    contactId: string,
+  ): Promise<Array<RoleContact & { role: Role }>>
   /** Every Status, in the order chosen for them. */
   listStatuses(): Promise<Status[]>
   /** Adds a Status at the end of the list, neither Closed nor Applied. */
@@ -394,6 +465,11 @@ export async function openDataLayer(options: {
           status.isParked = status.name === 'Parked'
         }),
     )
+  // v8 adds Contacts and Role contacts.
+  db.version(8).stores({
+    contacts: 'id, companyId',
+    roleContacts: 'id, roleId, contactId',
+  })
   db.on('populate', (tx) => {
     tx.table('statuses').bulkAdd(
       defaultStatuses.map((status, order) => ({
@@ -415,6 +491,12 @@ export async function openDataLayer(options: {
       .first()
     if (taken) {
       throw new Error(`There is already a Company called ${taken.name}`)
+    }
+  }
+
+  async function checkCompanyExists(companyId: string | null) {
+    if (companyId !== null && !(await db.companies.get(companyId))) {
+      throw new Error(`No Company with id ${companyId}`)
     }
   }
 
@@ -477,13 +559,7 @@ export async function openDataLayer(options: {
           return role
         },
       ),
-    // Roles added together share a timestamp, so title breaks the tie.
-    listRoles: async () =>
-      (await db.roles.toArray()).sort(
-        (a, b) =>
-          a.createdAt.localeCompare(b.createdAt) ||
-          a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }),
-      ),
+    listRoles: async () => (await db.roles.toArray()).sort(byCreatedThenTitle),
     getRole: (id) => db.roles.get(id),
     updateRole: (id, changes) =>
       db.transaction('rw', db.roles, db.companies, async () => {
@@ -493,12 +569,7 @@ export async function openDataLayer(options: {
         updated.title = requireTitle(updated.title)
         updated.flags = normalizeFlags(updated.flags)
         checkFitRating(updated.fitRating)
-        if (
-          updated.companyId !== null &&
-          !(await db.companies.get(updated.companyId))
-        ) {
-          throw new Error(`No Company with id ${updated.companyId}`)
-        }
+        await checkCompanyExists(updated.companyId)
         // The saved date tracks the Posting copy text, not other edits.
         if (updated.postingCopy !== role.postingCopy) {
           updated.postingCopySavedAt =
@@ -508,10 +579,17 @@ export async function openDataLayer(options: {
         return updated
       }),
     deleteRole: (id) =>
-      db.transaction('rw', db.roles, db.statusHistory, async () => {
-        await db.statusHistory.where('roleId').equals(id).delete()
-        await db.roles.delete(id)
-      }),
+      db.transaction(
+        'rw',
+        db.roles,
+        db.statusHistory,
+        db.roleContacts,
+        async () => {
+          await db.statusHistory.where('roleId').equals(id).delete()
+          await db.roleContacts.where('roleId').equals(id).delete()
+          await db.roles.delete(id)
+        },
+      ),
     createCompany: ({ name }) =>
       db.transaction('rw', db.companies, async () => {
         const company: Company = {
@@ -527,13 +605,17 @@ export async function openDataLayer(options: {
       (await db.companies.toArray()).sort(byNameIgnoringCase),
     getCompany: (id) => db.companies.get(id),
     deleteCompany: (id) =>
-      db.transaction('rw', db.companies, db.roles, async () => {
+      db.transaction('rw', db.companies, db.roles, db.contacts, async () => {
         const company = await db.companies.get(id)
         if (!company) return
         const roleCount = await db.roles.where('companyId').equals(id).count()
         if (roleCount > 0) {
           throw new Error(companyHasRolesMessage(company.name, roleCount))
         }
+        await db.contacts
+          .where('companyId')
+          .equals(id)
+          .modify({ companyId: null })
         await db.companies.delete(id)
       }),
     listRolesAtCompany: (companyId) =>
@@ -548,6 +630,100 @@ export async function openDataLayer(options: {
         await checkCompanyNameIsFree(updated)
         await db.companies.put(updated)
         return updated
+      }),
+    createContact: ({ name }) =>
+      db.transaction('rw', db.contacts, async () => {
+        const contact: Contact = {
+          id: newId(),
+          ...emptyContact,
+          name: requireContactName(name),
+        }
+        await db.contacts.add(contact)
+        return contact
+      }),
+    listContacts: async () =>
+      (await db.contacts.toArray()).sort(byNameIgnoringCase),
+    getContact: (id) => db.contacts.get(id),
+    updateContact: (id, changes) =>
+      db.transaction('rw', db.contacts, db.companies, async () => {
+        const contact = await db.contacts.get(id)
+        if (!contact) throw new Error(`No Contact with id ${id}`)
+        const updated: Contact = { ...contact, ...changes }
+        updated.name = requireContactName(updated.name)
+        await checkCompanyExists(updated.companyId)
+        await db.contacts.put(updated)
+        return updated
+      }),
+    deleteContact: (id) =>
+      db.transaction('rw', db.contacts, db.roleContacts, async () => {
+        await db.roleContacts.where('contactId').equals(id).delete()
+        await db.contacts.delete(id)
+      }),
+    listContactsAtCompany: async (companyId) =>
+      (await db.contacts.where('companyId').equals(companyId).toArray()).sort(
+        byNameIgnoringCase,
+      ),
+    linkContact: ({ roleId, contactId, type }) =>
+      db.transaction('rw', db.roles, db.contacts, db.roleContacts, async () => {
+        if (!(await db.roles.get(roleId))) {
+          throw new Error(`No Role with id ${roleId}`)
+        }
+        const contact = await db.contacts.get(contactId)
+        if (!contact) throw new Error(`No Contact with id ${contactId}`)
+        if (!roleContactTypes.includes(type)) {
+          throw new Error(`No Role contact type ${type}`)
+        }
+        const repeated = await db.roleContacts
+          .where('roleId')
+          .equals(roleId)
+          .filter((r) => r.contactId === contactId && r.type === type)
+          .first()
+        if (repeated) {
+          throw new Error(`${contact.name} is already a ${type} on this Role`)
+        }
+        const roleContact: RoleContact = {
+          id: newId(),
+          roleId,
+          contactId,
+          type,
+        }
+        await db.roleContacts.add(roleContact)
+        return roleContact
+      }),
+    unlinkContact: (roleContactId) => db.roleContacts.delete(roleContactId),
+    listRoleContacts: (roleId) =>
+      db.transaction('r', db.contacts, db.roleContacts, async () => {
+        const links = await db.roleContacts
+          .where('roleId')
+          .equals(roleId)
+          .toArray()
+        const contacts = await db.contacts.bulkGet(
+          links.map((link) => link.contactId),
+        )
+        return links
+          .map((link, i) => ({ ...link, contact: contacts[i]! }))
+          .sort(
+            (a, b) =>
+              roleContactTypes.indexOf(a.type) -
+                roleContactTypes.indexOf(b.type) ||
+              byNameIgnoringCase(a.contact, b.contact),
+          )
+      }),
+    listRolesOfContact: (contactId) =>
+      db.transaction('r', db.roles, db.roleContacts, async () => {
+        const links = await db.roleContacts
+          .where('contactId')
+          .equals(contactId)
+          .toArray()
+        const roles = await db.roles.bulkGet(links.map((link) => link.roleId))
+        return links
+          .map((link, i) => ({ ...link, role: roles[i]! }))
+          .sort(
+            (a, b) =>
+              byCreatedThenTitle(a.role, b.role) ||
+              roleContactTypes.indexOf(a.type) -
+                roleContactTypes.indexOf(b.type),
+          )
       }),
     changeStatus: (roleId, statusId, changes = {}) =>
       db.transaction(

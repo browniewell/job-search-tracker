@@ -1,6 +1,5 @@
-import { useId, useState, type FormEvent } from 'react'
 import { FlagsInput } from '../components/FlagsInput'
-import { FormRow } from '../components/FormRow'
+import { useEditForm } from '../components/useEditForm'
 import type { Company, CompanyFields } from '../data/dataLayer'
 
 type FormValues = {
@@ -46,73 +45,24 @@ export function CompanyForm({
   onSave: (fields: CompanyFields) => Promise<void>
   onCancel: () => void
 }) {
-  const [values, setValues] = useState(() => toFormValues(company))
-  const [error, setError] = useState<string | null>(null)
-  const idPrefix = useId()
-  type TextField = Exclude<keyof FormValues, 'flags'>
-  const idFor = (field: TextField) => `${idPrefix}-${field}`
-
-  function set<K extends keyof FormValues>(field: K, value: FormValues[K]) {
-    setValues((current) => ({ ...current, [field]: value }))
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    try {
-      await onSave(toCompanyFields(values))
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  const textInput = (
-    field: TextField,
-    label: string,
-    type = 'text',
-    hint?: string,
-  ) => (
-    <FormRow id={idFor(field)} label={label} hint={hint}>
-      <input
-        id={idFor(field)}
-        type={type}
-        required={field === 'name'}
-        value={values[field]}
-        onChange={(event) => set(field, event.target.value)}
-        aria-describedby={hint && `${idFor(field)}-hint`}
-      />
-    </FormRow>
-  )
-
-  const textArea = (field: TextField, label: string) => (
-    <FormRow id={idFor(field)} label={label}>
-      <textarea
-        id={idFor(field)}
-        rows={4}
-        value={values[field]}
-        onChange={(event) => set(field, event.target.value)}
-      />
-    </FormRow>
-  )
+  const { values, set, submit, errorMessage, textInput, textArea } =
+    useEditForm(
+      () => toFormValues(company),
+      (values) => onSave(toCompanyFields(values)),
+    )
 
   return (
     <form className="edit-form" onSubmit={submit} aria-label="Edit Company">
-      {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
-      )}
+      {errorMessage}
       <fieldset>
         <legend>Company</legend>
-        {textInput('name', 'Company name')}
+        {textInput('name', 'Company name', { required: true })}
         {textInput('industry', 'Industry')}
         {textArea('summary', 'Summary')}
-        {textInput('website', 'Website', 'url')}
-        {textInput(
-          'size',
-          'Company size',
-          'text',
-          'e.g. 51–200 (143 on LinkedIn)',
-        )}
+        {textInput('website', 'Website', { type: 'url' })}
+        {textInput('size', 'Company size', {
+          hint: 'e.g. 51–200 (143 on LinkedIn)',
+        })}
         {textArea('notes', 'Notes')}
       </fieldset>
       <FlagsInput

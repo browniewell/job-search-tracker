@@ -8,11 +8,14 @@ import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
 // previous version (CODING_STANDARDS.md). Add an entry for the new version;
 // an entry that has reached main stays as it is.
 // Every table is recorded from v5 on; v4 recorded Roles and Companies only.
+// v8 adds Contacts and Role contacts.
 const entityByTable = {
   roles: 'role',
   companies: 'company',
   statusHistory: 'statusHistoryEntry',
   statuses: 'status',
+  contacts: 'contact',
+  roleContacts: 'roleContact',
 } as const
 type Entity = (typeof entityByTable)[keyof typeof entityByTable]
 
@@ -196,6 +199,70 @@ const storedFields: Record<number, Partial<Record<Entity, string[]>>> = {
     ],
     status: ['closed', 'id', 'isApplied', 'isParked', 'name', 'order'],
   },
+  8: {
+    role: [
+      'companyId',
+      'createdAt',
+      'expectedSalary',
+      'fitNotes',
+      'fitRating',
+      'flags',
+      'hiringSiteLink',
+      'id',
+      'location',
+      'minimumSalary',
+      'nextAction',
+      'nextActionDate',
+      'notes',
+      'parkedReason',
+      'postingCopy',
+      'postingCopySavedAt',
+      'postingDate',
+      'postingLink',
+      'referralSubmitted',
+      'roleSummary',
+      'salaryMax',
+      'salaryMin',
+      'salaryNote',
+      'salaryPeriod',
+      'statusId',
+      'title',
+      'workArrangement',
+    ],
+    company: [
+      'flags',
+      'id',
+      'industry',
+      'name',
+      'notes',
+      'size',
+      'summary',
+      'website',
+    ],
+    statusHistoryEntry: [
+      'at',
+      'fromStatusId',
+      'fromStatusName',
+      'id',
+      'imported',
+      'roleId',
+      'sequence',
+      'toStatusId',
+      'toStatusName',
+    ],
+    status: ['closed', 'id', 'isApplied', 'isParked', 'name', 'order'],
+    contact: [
+      'companyId',
+      'email',
+      'howYouKnow',
+      'id',
+      'linkedIn',
+      'name',
+      'notes',
+      'title',
+    ],
+    roleContact: ['contactId', 'id', 'roleId', 'type'],
+  },
 }
 
 describe('Schema tripwire', () => {
@@ -203,8 +270,14 @@ describe('Schema tripwire', () => {
     const name = uniqueDatabaseName()
     const data = await openTestDataLayer({ name })
     // One record in every table: Statuses are seeded, history comes with the Role.
-    await data.createRole({ title: 'Senior QA Engineer' })
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
     await data.createCompany({ name: 'Acme' })
+    const contact = await data.createContact({ name: 'Priya Shah' })
+    await data.linkContact({
+      roleId: role.id,
+      contactId: contact.id,
+      type: 'recruiter',
+    })
     const raw = await new Dexie(name).open()
     const version = raw.verno
     const stored: Record<string, string[]> = {}

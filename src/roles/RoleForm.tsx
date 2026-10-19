@@ -1,4 +1,3 @@
-import { useId, useState, type FormEvent } from 'react'
 import type {
   Company,
   FitRating,
@@ -8,7 +7,7 @@ import type {
   WorkArrangement,
 } from '../data/dataLayer'
 import { FlagsInput } from '../components/FlagsInput'
-import { FormRow } from '../components/FormRow'
+import { useEditForm } from '../components/useEditForm'
 import {
   companyNotDisclosed,
   salaryPeriodLabels,
@@ -97,93 +96,26 @@ export function RoleForm({
   onSave: (fields: RoleFields) => Promise<void>
   onCancel: () => void
 }) {
-  const [values, setValues] = useState(() => toFormValues(role))
-  const [error, setError] = useState<string | null>(null)
-  const idPrefix = useId()
-
-  const idFor = (field: keyof FormValues) => `${idPrefix}-${field}`
-
-  function set<K extends keyof FormValues>(field: K, value: FormValues[K]) {
-    setValues((current) => ({ ...current, [field]: value }))
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    try {
-      await onSave(toRoleFields(values))
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  const textInput = (
-    field: keyof FormValues,
-    label: string,
-    type = 'text',
-    hint?: string,
-  ) => (
-    <FormRow id={idFor(field)} label={label} hint={hint}>
-      <input
-        id={idFor(field)}
-        type={type}
-        value={values[field] as string}
-        onChange={(event) => set(field, event.target.value)}
-        aria-describedby={hint && `${idFor(field)}-hint`}
-        {...(type === 'number' ? { min: 0, step: 'any' } : {})}
-      />
-    </FormRow>
-  )
-
-  const textArea = (field: keyof FormValues, label: string) => (
-    <FormRow id={idFor(field)} label={label}>
-      <textarea
-        id={idFor(field)}
-        rows={4}
-        value={values[field] as string}
-        onChange={(event) => set(field, event.target.value)}
-      />
-    </FormRow>
-  )
-
-  const select = (
-    field: keyof FormValues,
-    label: string,
-    emptyLabel: string,
-    options: Array<[value: string, label: string]>,
-  ) => (
-    <FormRow id={idFor(field)} label={label}>
-      <select
-        id={idFor(field)}
-        value={values[field] as string}
-        onChange={(event) => set(field, event.target.value)}
-      >
-        <option value="">{emptyLabel}</option>
-        {options.map(([value, optionLabel]) => (
-          <option key={value} value={value}>
-            {optionLabel}
-          </option>
-        ))}
-      </select>
-    </FormRow>
+  const {
+    values,
+    set,
+    idFor,
+    submit,
+    errorMessage,
+    textInput,
+    textArea,
+    select,
+  } = useEditForm(
+    () => toFormValues(role),
+    (values) => onSave(toRoleFields(values)),
   )
 
   return (
     <form className="edit-form" onSubmit={submit} aria-label="Edit Role">
-      {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
-      )}
+      {errorMessage}
       <fieldset>
         <legend>Overview</legend>
-        <FormRow id={idFor('title')} label="Role title">
-          <input
-            id={idFor('title')}
-            required
-            value={values.title}
-            onChange={(event) => set('title', event.target.value)}
-          />
-        </FormRow>
+        {textInput('title', 'Role title', { required: true })}
         {select(
           'companyId',
           'Company',
@@ -202,33 +134,29 @@ export function RoleForm({
       </fieldset>
       <fieldset>
         <legend>Pay (USD)</legend>
-        {textInput('salaryMin', 'Posted salary minimum', 'number')}
-        {textInput('salaryMax', 'Posted salary maximum', 'number')}
+        {textInput('salaryMin', 'Posted salary minimum', { type: 'number' })}
+        {textInput('salaryMax', 'Posted salary maximum', { type: 'number' })}
         {select(
           'salaryPeriod',
           'Salary period',
           'Not set',
           Object.entries(salaryPeriodLabels),
         )}
-        {textInput('salaryNote', 'Salary note', 'text', 'e.g. OTE, + equity')}
-        {textInput(
-          'expectedSalary',
-          'Expected salary',
-          'number',
-          'Per year, even for an hourly Role.',
-        )}
-        {textInput(
-          'minimumSalary',
-          'Minimum salary',
-          'number',
-          'Per year. Private: never exported to CSV.',
-        )}
+        {textInput('salaryNote', 'Salary note', { hint: 'e.g. OTE, + equity' })}
+        {textInput('expectedSalary', 'Expected salary', {
+          type: 'number',
+          hint: 'Per year, even for an hourly Role.',
+        })}
+        {textInput('minimumSalary', 'Minimum salary', {
+          type: 'number',
+          hint: 'Per year. Private: never exported to CSV.',
+        })}
       </fieldset>
       <fieldset>
         <legend>Posting</legend>
-        {textInput('postingLink', 'Posting link', 'url')}
-        {textInput('hiringSiteLink', 'Hiring site link', 'url')}
-        {textInput('postingDate', 'Posting date', 'date')}
+        {textInput('postingLink', 'Posting link', { type: 'url' })}
+        {textInput('hiringSiteLink', 'Hiring site link', { type: 'url' })}
+        {textInput('postingDate', 'Posting date', { type: 'date' })}
         {textArea('postingCopy', 'Posting copy')}
       </fieldset>
       <fieldset>
@@ -260,7 +188,7 @@ export function RoleForm({
       <fieldset>
         <legend>Next action</legend>
         {textInput('nextAction', 'Next action')}
-        {textInput('nextActionDate', 'Next action date', 'date')}
+        {textInput('nextActionDate', 'Next action date', { type: 'date' })}
       </fieldset>
       <fieldset>
         <legend>Notes</legend>

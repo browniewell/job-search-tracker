@@ -12,6 +12,7 @@ import {
   companyHasRolesMessage,
   type Company,
   type CompanyFields,
+  type Contact,
   type Role,
 } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
@@ -20,9 +21,15 @@ import { CompanyForm } from './CompanyForm'
 type Loaded = {
   company: Company | undefined
   roles: Role[]
+  contacts: Contact[]
   flagSuggestions: string[]
 }
 type Mode = 'view' | 'edit' | 'confirm-delete'
+
+function keptContactsMessage(contactCount: number): string {
+  const contacts = contactCount === 1 ? '1 Contact' : `${contactCount} Contacts`
+  return `Its ${contacts} will be kept, with no Company.`
+}
 
 export function CompanyDetailPage() {
   const data = useDataLayer()
@@ -37,9 +44,10 @@ export function CompanyDetailPage() {
     Promise.all([
       data.getCompany(companyId),
       data.listRolesAtCompany(companyId),
+      data.listContactsAtCompany(companyId),
       data.listFlagSuggestions(),
-    ]).then(([company, roles, flagSuggestions]) => {
-      if (!cancelled) setLoaded({ company, roles, flagSuggestions })
+    ]).then(([company, roles, contacts, flagSuggestions]) => {
+      if (!cancelled) setLoaded({ company, roles, contacts, flagSuggestions })
     })
     return () => {
       cancelled = true
@@ -47,7 +55,7 @@ export function CompanyDetailPage() {
   }, [data, companyId])
 
   if (loaded === null) return null
-  const { company, roles, flagSuggestions } = loaded
+  const { company, roles, contacts, flagSuggestions } = loaded
   const backLink = <Link to="/companies">← All Companies</Link>
   if (!company) {
     return (
@@ -64,6 +72,7 @@ export function CompanyDetailPage() {
     setLoaded({
       company: updated,
       roles,
+      contacts,
       flagSuggestions: await data.listFlagSuggestions(),
     })
     setMode('view')
@@ -125,7 +134,10 @@ export function CompanyDetailPage() {
               onConfirm={deleteCompany}
               onCancel={() => setMode('view')}
             >
-              “{company.name}” will be deleted. This can’t be undone.
+              “{company.name}” will be deleted.
+              {contacts.length > 0 &&
+                ` ${keptContactsMessage(contacts.length)}`}{' '}
+              This can’t be undone.
             </ConfirmDelete>
           )}
           <section aria-label="Company fields" className="detail-fields">
@@ -152,6 +164,24 @@ export function CompanyDetailPage() {
                 {roles.map((role) => (
                   <li key={role.id}>
                     <Link to={`/roles/${role.id}`}>{role.title}</Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section aria-labelledby="company-contacts-heading">
+            <h3 id="company-contacts-heading">Contacts</h3>
+            {contacts.length === 0 ? (
+              <p>No Contacts at {company.name} yet.</p>
+            ) : (
+              <ul
+                aria-label={`Contacts at ${company.name}`}
+                className="item-list"
+              >
+                {contacts.map((contact) => (
+                  <li key={contact.id}>
+                    <Link to={`/contacts/${contact.id}`}>{contact.name}</Link>
+                    <span className="secondary-text">{contact.title}</span>
                   </li>
                 ))}
               </ul>
