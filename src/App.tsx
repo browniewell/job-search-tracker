@@ -8,6 +8,7 @@ import { DataLayerContext } from './dataContext'
 import { PipelineBoardPage } from './roles/PipelineBoardPage'
 import { RoleDetailPage } from './roles/RoleDetailPage'
 import { RolesPage } from './roles/RolesPage'
+import { SavedSearchesPage } from './savedSearches/SavedSearchesPage'
 import { SettingsPage } from './settings/SettingsPage'
 
 export function App({ data }: { data: DataLayer }) {
@@ -23,6 +24,7 @@ export function App({ data }: { data: DataLayer }) {
             <NavLink to="/board">Pipeline board</NavLink>
             <NavLink to="/companies">Companies</NavLink>
             <NavLink to="/contacts">Contacts</NavLink>
+            <NavLink to="/saved-searches">Saved searches</NavLink>
             <NavLink to="/settings">Settings</NavLink>
           </nav>
         </header>
@@ -41,6 +43,7 @@ export function App({ data }: { data: DataLayer }) {
               path="/contacts/:contactId"
               element={<ContactDetailPage />}
             />
+            <Route path="/saved-searches" element={<SavedSearchesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

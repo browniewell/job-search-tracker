@@ -171,17 +171,23 @@ button {
   border-top: 1px solid var(--border);
 }
 
-/* An Interview's details stack, rather than sharing one line. */
-.item-list .interview {
+/* An Interview's or Saved search's details stack, rather than sharing one line. */
+.item-list .stacked {
   display: block;
 }
 
-.interview h4,
-.interview p {
+.stacked h3,
+.stacked h4,
+.stacked p {
   margin: 0 0 0.25rem;
+  overflow-wrap: anywhere;
 }
 
-.interview .page-actions {
+.stacked h3 {
+  font-size: 1rem;
+}
+
+.stacked .page-actions {
   margin: 0.5rem 0 0;
 }
 

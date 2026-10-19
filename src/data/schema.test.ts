@@ -8,7 +8,8 @@ import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
 // previous version (CODING_STANDARDS.md). Add an entry for the new version;
 // an entry that has reached main stays as it is.
 // Every table is recorded from v5 on; v4 recorded Roles and Companies only.
-// v8 adds Contacts and Role contacts; v9 adds Interviews.
+// v8 adds Contacts and Role contacts; v9 adds Interviews; v10 adds Saved
+// searches.
 const entityByTable = {
   roles: 'role',
   companies: 'company',
@@ -17,6 +18,7 @@ const entityByTable = {
   contacts: 'contact',
   roleContacts: 'roleContact',
   interviews: 'interview',
+  savedSearches: 'savedSearch',
 } as const
 type Entity = (typeof entityByTable)[keyof typeof entityByTable]
 
@@ -337,6 +339,80 @@ const storedFields: Record<number, Partial<Record<Entity, string[]>>> = {
       'type',
     ],
   },
+  10: {
+    role: [
+      'companyId',
+      'createdAt',
+      'expectedSalary',
+      'fitNotes',
+      'fitRating',
+      'flags',
+      'hiringSiteLink',
+      'id',
+      'location',
+      'minimumSalary',
+      'nextAction',
+      'nextActionDate',
+      'notes',
+      'parkedReason',
+      'postingCopy',
+      'postingCopySavedAt',
+      'postingDate',
+      'postingLink',
+      'referralSubmitted',
+      'roleSummary',
+      'salaryMax',
+      'salaryMin',
+      'salaryNote',
+      'salaryPeriod',
+      'statusId',
+      'title',
+      'workArrangement',
+    ],
+    company: [
+      'flags',
+      'id',
+      'industry',
+      'name',
+      'notes',
+      'size',
+      'summary',
+      'website',
+    ],
+    statusHistoryEntry: [
+      'at',
+      'fromStatusId',
+      'fromStatusName',
+      'id',
+      'imported',
+      'roleId',
+      'sequence',
+      'toStatusId',
+      'toStatusName',
+    ],
+    status: ['closed', 'id', 'isApplied', 'isParked', 'name', 'order'],
+    contact: [
+      'companyId',
+      'email',
+      'howYouKnow',
+      'id',
+      'linkedIn',
+      'name',
+      'notes',
+      'title',
+    ],
+    roleContact: ['contactId', 'id', 'roleId', 'type'],
+    interview: [
+      'at',
+      'followUpSent',
+      'id',
+      'interviewerIds',
+      'notes',
+      'roleId',
+      'type',
+    ],
+    savedSearch: ['id', 'lastCheckedAt', 'link', 'name', 'site'],
+  },
 }
 
 describe('Schema tripwire', () => {
@@ -359,6 +435,11 @@ describe('Schema tripwire', () => {
       interviewerIds: [contact.id],
       notes: null,
       followUpSent: false,
+    })
+    await data.createSavedSearch({
+      name: 'QA lead',
+      link: 'https://www.linkedin.com/jobs/search?keywords=QA',
+      site: 'LinkedIn',
     })
     const raw = await new Dexie(name).open()
     const version = raw.verno
