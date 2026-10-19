@@ -135,7 +135,7 @@ A link between a Contact and a Role, typed as referrer, recruiter, hiring manage
 _Avoid_: Relationship, association
 
 **Interview**:
-A scheduled or completed conversation for a Role, with Contacts as its interviewers.
+A scheduled or completed conversation for a Role, typed as recruiter screen, hiring manager, technical, panel or other, with Contacts as its Interviewers. A Role has one Interview of each type at a time.
 _Avoid_: Meeting, call
 
 **Interviewer**:

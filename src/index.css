@@ -171,6 +171,24 @@ button {
   border-top: 1px solid var(--border);
 }
 
+/* An Interview's details stack, rather than sharing one line. */
+.item-list .interview {
+  display: block;
+}
+
+.interview h4,
+.interview p {
+  margin: 0 0 0.25rem;
+}
+
+.interview .page-actions {
+  margin: 0.5rem 0 0;
+}
+
+.role-interviews .item-list {
+  margin-bottom: 1rem;
+}
+
 a {
   color: var(--accent);
 }

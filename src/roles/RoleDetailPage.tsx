@@ -14,6 +14,7 @@ import { useDataLayer } from '../dataContext'
 import { ChangeStatusForm } from './ChangeStatusForm'
 import { RoleContacts } from './RoleContacts'
 import { RoleFieldsView } from './RoleFieldsView'
+import { RoleInterviews } from './RoleInterviews'
 import { RoleForm } from './RoleForm'
 import { StatusTimeline } from './StatusTimeline'
 import { rolesListPath } from './rolesListLocation'
@@ -133,8 +134,8 @@ export function RoleDetailPage() {
               onConfirm={deleteRole}
               onCancel={() => setMode('view')}
             >
-              “{role.title}”, its Status history and its Role contacts will be
-              deleted. Its Contacts are kept. This can’t be undone.
+              “{role.title}”, its Status history, Role contacts and Interviews
+              will be deleted. Its Contacts are kept. This can’t be undone.
             </ConfirmDelete>
           )}
           <ChangeStatusForm
@@ -150,6 +151,7 @@ export function RoleDetailPage() {
             parked={status?.isParked ?? false}
           />
           <RoleContacts roleId={roleId} />
+          <RoleInterviews roleId={roleId} />
           <StatusTimeline entries={history} />
         </>
       )}

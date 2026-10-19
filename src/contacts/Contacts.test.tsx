@@ -120,7 +120,7 @@ describe('Contact pages', () => {
       name: 'Delete this Contact?',
     })
     expect(confirm).toHaveTextContent(
-      '“Priya Shah” will be deleted and taken off every Role.',
+      '“Priya Shah” will be deleted and taken off every Role and Interview.',
     )
     await user.click(within(confirm).getByRole('button', { name: 'Delete' }))
 

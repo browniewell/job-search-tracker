@@ -57,7 +57,7 @@ for (const [device, viewport] of [
   ['phone', { width: 375, height: 812 }],
   ['desktop', { width: 1280, height: 800 }],
 ] as const) {
-  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each, link a Contact to the Role, list Roles, open the Pipeline board and configure Statuses, then nothing spills out of its container and axe finds no accessibility problems`, async ({
+  test(`Given a Flagged Role at a Flagged Company on a ${device}, when I view and edit each, link a Contact to the Role, log an Interview, list Roles, open the Pipeline board and configure Statuses, then nothing spills out of its container and axe finds no accessibility problems`, async ({
     page,
   }) => {
     await page.setViewportSize({
@@ -119,7 +119,27 @@ for (const [device, viewport] of [
       page.getByRole('list', { name: 'Hiring manager' }),
     ).toBeVisible()
     await checkPage(page, 'Role page with Role contacts')
-    await page.getByRole('link', { name: 'Priya Shah' }).click()
+    await page.getByRole('button', { name: 'Log an Interview' }).click()
+    await page.getByLabel('Date and time').fill('2026-10-20T14:00')
+    await page
+      .getByLabel('Interview type')
+      .selectOption({ label: 'Recruiter screen' })
+    await page.getByRole('checkbox', { name: 'Priya Shah' }).check()
+    await page
+      .getByLabel('Notes')
+      .fill('Asked about salary expectations and the hybrid schedule')
+    await checkPage(page, 'Interview form')
+    await page.getByRole('button', { name: 'Save' }).click()
+    await expect(page.getByRole('list', { name: 'Interviewers' })).toBeVisible()
+    await checkPage(page, 'Role page with Interviews')
+    await page.getByRole('button', { name: /^Delete Recruiter screen/ }).click()
+    await expect(page.getByRole('alertdialog')).toBeVisible()
+    await checkPage(page, 'Role page, deleting an Interview')
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    await page
+      .getByRole('list', { name: 'Hiring manager' })
+      .getByRole('link', { name: 'Priya Shah' })
+      .click()
     await expect(
       page.getByRole('list', { name: 'Roles with Priya Shah' }),
     ).toBeVisible()

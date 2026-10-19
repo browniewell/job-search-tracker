@@ -99,12 +99,12 @@ export function RoleForm({
   const {
     values,
     set,
-    idFor,
     submit,
     errorMessage,
     textInput,
     textArea,
     select,
+    checkbox,
   } = useEditForm(
     () => toFormValues(role),
     (values) => onSave(toRoleFields(values)),
@@ -169,15 +169,7 @@ export function RoleForm({
           ['5', '5'],
         ])}
         {textArea('fitNotes', 'Fit notes')}
-        <div className="form-row checkbox-row">
-          <input
-            id={idFor('referralSubmitted')}
-            type="checkbox"
-            checked={values.referralSubmitted}
-            onChange={(event) => set('referralSubmitted', event.target.checked)}
-          />
-          <label htmlFor={idFor('referralSubmitted')}>Referral submitted</label>
-        </div>
+        {checkbox('referralSubmitted', 'Referral submitted')}
       </fieldset>
       <FlagsInput
         flags={values.flags}

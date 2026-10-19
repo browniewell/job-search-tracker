@@ -8,7 +8,7 @@ import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
 // previous version (CODING_STANDARDS.md). Add an entry for the new version;
 // an entry that has reached main stays as it is.
 // Every table is recorded from v5 on; v4 recorded Roles and Companies only.
-// v8 adds Contacts and Role contacts.
+// v8 adds Contacts and Role contacts; v9 adds Interviews.
 const entityByTable = {
   roles: 'role',
   companies: 'company',
@@ -16,6 +16,7 @@ const entityByTable = {
   statuses: 'status',
   contacts: 'contact',
   roleContacts: 'roleContact',
+  interviews: 'interview',
 } as const
 type Entity = (typeof entityByTable)[keyof typeof entityByTable]
 
@@ -263,6 +264,79 @@ const storedFields: Record<number, Partial<Record<Entity, string[]>>> = {
     ],
     roleContact: ['contactId', 'id', 'roleId', 'type'],
   },
+  9: {
+    role: [
+      'companyId',
+      'createdAt',
+      'expectedSalary',
+      'fitNotes',
+      'fitRating',
+      'flags',
+      'hiringSiteLink',
+      'id',
+      'location',
+      'minimumSalary',
+      'nextAction',
+      'nextActionDate',
+      'notes',
+      'parkedReason',
+      'postingCopy',
+      'postingCopySavedAt',
+      'postingDate',
+      'postingLink',
+      'referralSubmitted',
+      'roleSummary',
+      'salaryMax',
+      'salaryMin',
+      'salaryNote',
+      'salaryPeriod',
+      'statusId',
+      'title',
+      'workArrangement',
+    ],
+    company: [
+      'flags',
+      'id',
+      'industry',
+      'name',
+      'notes',
+      'size',
+      'summary',
+      'website',
+    ],
+    statusHistoryEntry: [
+      'at',
+      'fromStatusId',
+      'fromStatusName',
+      'id',
+      'imported',
+      'roleId',
+      'sequence',
+      'toStatusId',
+      'toStatusName',
+    ],
+    status: ['closed', 'id', 'isApplied', 'isParked', 'name', 'order'],
+    contact: [
+      'companyId',
+      'email',
+      'howYouKnow',
+      'id',
+      'linkedIn',
+      'name',
+      'notes',
+      'title',
+    ],
+    roleContact: ['contactId', 'id', 'roleId', 'type'],
+    interview: [
+      'at',
+      'followUpSent',
+      'id',
+      'interviewerIds',
+      'notes',
+      'roleId',
+      'type',
+    ],
+  },
 }
 
 describe('Schema tripwire', () => {
@@ -277,6 +351,14 @@ describe('Schema tripwire', () => {
       roleId: role.id,
       contactId: contact.id,
       type: 'recruiter',
+    })
+    await data.createInterview({
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'recruiter screen',
+      interviewerIds: [contact.id],
+      notes: null,
+      followUpSent: false,
     })
     const raw = await new Dexie(name).open()
     const version = raw.verno

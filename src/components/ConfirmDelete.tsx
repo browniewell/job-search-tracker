@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 
 /** An inline delete confirmation that focuses Cancel, the safe choice. */
 export function ConfirmDelete({
@@ -13,6 +13,8 @@ export function ConfirmDelete({
   onCancel: () => void
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null)
+  // Unique, as a page may hold more than one confirmation.
+  const id = useId()
 
   // Focus the safe choice so Enter doesn't delete by accident.
   useEffect(() => cancelRef.current?.focus(), [])
@@ -23,15 +25,15 @@ export function ConfirmDelete({
     // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions
     <div
       role="alertdialog"
-      aria-labelledby="confirm-delete-heading"
-      aria-describedby="confirm-delete-description"
+      aria-labelledby={`${id}-heading`}
+      aria-describedby={`${id}-description`}
       className="confirm"
       onKeyDown={(event) => {
         if (event.key === 'Escape') onCancel()
       }}
     >
-      <h3 id="confirm-delete-heading">{heading}</h3>
-      <p id="confirm-delete-description">{children}</p>
+      <h3 id={`${id}-heading`}>{heading}</h3>
+      <p id={`${id}-description`}>{children}</p>
       <div className="form-actions">
         <button type="button" className="danger" onClick={onConfirm}>
           Delete

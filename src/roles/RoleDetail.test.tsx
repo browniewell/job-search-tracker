@@ -156,7 +156,7 @@ describe('Role detail page', () => {
     ).toHaveTextContent('Not set')
   })
 
-  it('Given a Role, when I delete it and confirm, then I am back on the Roles list and it is gone', async () => {
+  it('Given a Role, when I delete it, then I am told its Status history, Role contacts and Interviews go with it, and once I confirm I am back on the Roles list and it is gone', async () => {
     const data = await openTestDataLayer()
     const role = await data.createRole({ title: 'Senior QA Engineer' })
     const { user } = await openRoleDetail(data, 'Senior QA Engineer')
@@ -165,6 +165,9 @@ describe('Role detail page', () => {
     const confirm = screen.getByRole('alertdialog', {
       name: 'Delete this Role?',
     })
+    expect(confirm).toHaveTextContent(
+      '“Senior QA Engineer”, its Status history, Role contacts and Interviews will be deleted. Its Contacts are kept.',
+    )
     await user.click(within(confirm).getByRole('button', { name: 'Delete' }))
 
     expect(await screen.findByText(/no roles yet/i)).toBeInTheDocument()

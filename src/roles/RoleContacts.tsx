@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { Link } from 'react-router'
+import { ContactName } from '../components/ContactName'
 import { useEditForm } from '../components/useEditForm'
 import { roleContactTypeLabels } from '../contacts/format'
 import {
@@ -109,16 +110,7 @@ export function RoleContacts({ roleId }: { roleId: string }) {
               <ul aria-label={label} className="item-list">
                 {group.map((roleContact) => (
                   <li key={roleContact.id}>
-                    <span>
-                      <Link to={`/contacts/${roleContact.contactId}`}>
-                        {roleContact.contact.name}
-                      </Link>
-                      {roleContact.contact.title && (
-                        <span className="secondary-text">
-                          , {roleContact.contact.title}
-                        </span>
-                      )}
-                    </span>
+                    <ContactName contact={roleContact.contact} />
                     <button
                       type="button"
                       className="secondary"

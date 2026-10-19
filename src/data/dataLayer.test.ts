@@ -1,7 +1,12 @@
 import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
 import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
-import type { DataLayer, FitRating, RoleContactType } from './dataLayer'
+import type {
+  DataLayer,
+  FitRating,
+  InterviewType,
+  RoleContactType,
+} from './dataLayer'
 
 describe('Statuses', () => {
   it('Given a first run, then the default Statuses are seeded in order', async () => {
@@ -1352,6 +1357,34 @@ describe('Schema v8', () => {
   })
 })
 
+describe('Schema v9', () => {
+  it('Given a Role and a Contact saved before Interviews existed (schema v8), when the database is opened, then both read back and the Role has no Interviews or Interviewers', async () => {
+    const name = uniqueDatabaseName()
+    const v8 = new Dexie(name)
+    v8.version(8).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt, companyId, statusId',
+      statusHistory: 'id, roleId',
+      companies: 'id',
+      contacts: 'id, companyId',
+      roleContacts: 'id, roleId, contactId',
+    })
+    const scratch = await openTestDataLayer()
+    const role = await scratch.createRole({ title: 'Senior QA Engineer' })
+    const contact = await scratch.createContact({ name: 'Priya Shah' })
+    await v8.table('roles').add(role)
+    await v8.table('contacts').add(contact)
+    v8.close()
+
+    const data = await openTestDataLayer({ name })
+
+    expect(await data.getRole(role.id)).toEqual(role)
+    expect(await data.getContact(contact.id)).toEqual(contact)
+    expect(await data.listInterviews(role.id)).toEqual([])
+    expect(await data.listInterviewers(role.id)).toEqual([])
+  })
+})
+
 describe('Deleting with Contacts', () => {
   async function priyaOnTwoRoles() {
     const data = await openTestDataLayer()
@@ -1431,5 +1464,326 @@ describe('Deleting with Contacts', () => {
     expect(
       (await data.listRolesOfContact(priya.id)).map((r) => r.role.id),
     ).toEqual([second.id])
+  })
+})
+
+describe('Interviews', () => {
+  it('Given a Role in Interested, when an Interview is logged for it, then it is listed with its fields and the Role stays in Interested with no new Status history', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const historyBefore = await data.getStatusHistory(role.id)
+
+    const interview = await data.createInterview({
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'recruiter screen',
+      interviewerIds: [],
+      notes: '  Asked about salary  ',
+      followUpSent: true,
+    })
+
+    expect(await data.listInterviews(role.id)).toEqual([
+      {
+        id: interview.id,
+        roleId: role.id,
+        at: '2026-10-20T14:00',
+        type: 'recruiter screen',
+        interviewerIds: [],
+        interviewers: [],
+        notes: 'Asked about salary',
+        followUpSent: true,
+      },
+    ])
+    expect((await data.getRole(role.id))?.statusId).toBe(role.statusId)
+    expect(await data.getStatusHistory(role.id)).toEqual(historyBefore)
+  })
+
+  it('Given a Role with a recruiter screen and a technical at the same time on the 20th with Priya, then a panel on the 22nd with Priya and alex, then they are listed by date and time, then by type, and the Role lists Priya and alex as Interviewers once each, by name ignoring case', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const other = await data.createRole({ title: 'QA Lead' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+    const alex = await data.createContact({ name: 'alex Kim' })
+    const morgan = await data.createContact({ name: 'Morgan Lee' })
+    const interview = {
+      notes: null,
+      followUpSent: false,
+    }
+    await data.createInterview({
+      ...interview,
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'recruiter screen',
+      interviewerIds: [priya.id],
+    })
+    await data.createInterview({
+      ...interview,
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'technical',
+      interviewerIds: [priya.id],
+    })
+    await data.createInterview({
+      ...interview,
+      roleId: role.id,
+      at: '2026-10-22T09:00',
+      type: 'panel',
+      interviewerIds: [priya.id, alex.id],
+    })
+    await data.createInterview({
+      ...interview,
+      roleId: other.id,
+      at: '2026-10-21T10:00',
+      type: 'hiring manager',
+      interviewerIds: [morgan.id],
+    })
+
+    expect(
+      (await data.listInterviews(role.id)).map(({ at, type, interviewers }) => [
+        at,
+        type,
+        interviewers.map((contact) => contact.name),
+      ]),
+    ).toEqual([
+      ['2026-10-20T14:00', 'recruiter screen', ['Priya Shah']],
+      ['2026-10-20T14:00', 'technical', ['Priya Shah']],
+      ['2026-10-22T09:00', 'panel', ['alex Kim', 'Priya Shah']],
+    ])
+    expect(
+      (await data.listInterviewers(role.id)).map((contact) => contact.name),
+    ).toEqual(['alex Kim', 'Priya Shah'])
+    expect(
+      (await data.listInterviewers(other.id)).map((contact) => contact.name),
+    ).toEqual(['Morgan Lee'])
+  })
+
+  it('Given no such Role, Contact or type, or no type or date and time, when an Interview is logged with it, then it is rejected', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+    const interview = {
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'technical' as const,
+      interviewerIds: [priya.id],
+      notes: null,
+      followUpSent: false,
+    }
+
+    await expect(
+      data.createInterview({ ...interview, roleId: 'no-such-role' }),
+    ).rejects.toThrow('No Role with id no-such-role')
+    await expect(
+      data.createInterview({
+        ...interview,
+        interviewerIds: [priya.id, 'no-such-contact'],
+      }),
+    ).rejects.toThrow('No Contact with id no-such-contact')
+    await expect(
+      data.createInterview({ ...interview, type: 'lunch' as InterviewType }),
+    ).rejects.toThrow('No Interview type lunch')
+    await expect(
+      data.createInterview({ ...interview, type: '' as InterviewType }),
+    ).rejects.toThrow('An Interview needs a type')
+    for (const at of ['', '2026-10-20', 'tomorrow']) {
+      await expect(data.createInterview({ ...interview, at })).rejects.toThrow(
+        'An Interview needs a date and time',
+      )
+    }
+    expect(await data.listInterviews(role.id)).toEqual([])
+  })
+
+  it('Given a technical Interview at 14:00 on the 20th, when another technical Interview is logged or edited to that time, then it is rejected; a panel at that time is kept', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const interview = {
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'technical' as const,
+      interviewerIds: [],
+      notes: null,
+      followUpSent: false,
+    }
+    const technical = await data.createInterview(interview)
+    const repeated = 'There is already a technical Interview at that time'
+
+    await expect(data.createInterview(interview)).rejects.toThrow(repeated)
+    const later = await data.createInterview({
+      ...interview,
+      at: '2026-10-21T09:00',
+    })
+    await expect(
+      data.updateInterview(later.id, { at: '2026-10-20T14:00' }),
+    ).rejects.toThrow(repeated)
+    await data.createInterview({ ...interview, type: 'panel' })
+    await data.updateInterview(technical.id, { notes: 'Pairing' })
+
+    expect(
+      (await data.listInterviews(role.id)).map(({ at, type }) => [at, type]),
+    ).toEqual([
+      ['2026-10-20T14:00', 'technical'],
+      ['2026-10-20T14:00', 'panel'],
+      ['2026-10-21T09:00', 'technical'],
+    ])
+  })
+
+  it('Given Priya chosen twice as an Interviewer, when the Interview is logged, then she is on it once', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+
+    const interview = await data.createInterview({
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'technical',
+      interviewerIds: [priya.id, priya.id],
+      notes: null,
+      followUpSent: false,
+    })
+
+    expect(interview.interviewerIds).toEqual([priya.id])
+  })
+
+  it('Given a logged Interview, when it is edited, then the edits are kept after the database is reopened; when it is edited with no date and time, then it is rejected', async () => {
+    const name = uniqueDatabaseName()
+    const data = await openTestDataLayer({ name })
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+    const morgan = await data.createContact({ name: 'Morgan Lee' })
+    const interview = await data.createInterview({
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'recruiter screen',
+      interviewerIds: [priya.id],
+      notes: null,
+      followUpSent: false,
+    })
+
+    await data.updateInterview(interview.id, {
+      at: '2026-10-21T09:30',
+      type: 'hiring manager',
+      interviewerIds: [morgan.id],
+      notes: 'Went well',
+      followUpSent: true,
+    })
+    await expect(
+      data.updateInterview(interview.id, { at: '' }),
+    ).rejects.toThrow('An Interview needs a date and time')
+    data.close()
+
+    const reopened = await openTestDataLayer({ name })
+    expect(await reopened.listInterviews(role.id)).toEqual([
+      {
+        id: interview.id,
+        roleId: role.id,
+        at: '2026-10-21T09:30',
+        type: 'hiring manager',
+        interviewerIds: [morgan.id],
+        interviewers: [morgan],
+        notes: 'Went well',
+        followUpSent: true,
+      },
+    ])
+    expect(
+      (await reopened.listInterviewers(role.id)).map((c) => c.name),
+    ).toEqual(['Morgan Lee'])
+  })
+
+  it('Given two Interviews on a Role, when one is deleted, then only the other is listed and its Interviewers are the Role’s only Interviewers', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    const priya = await data.createContact({ name: 'Priya Shah' })
+    const morgan = await data.createContact({ name: 'Morgan Lee' })
+    const screen = await data.createInterview({
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'recruiter screen',
+      interviewerIds: [priya.id],
+      notes: null,
+      followUpSent: false,
+    })
+    await data.createInterview({
+      roleId: role.id,
+      at: '2026-10-21T09:30',
+      type: 'hiring manager',
+      interviewerIds: [morgan.id],
+      notes: null,
+      followUpSent: false,
+    })
+
+    await data.deleteInterview(screen.id)
+
+    expect((await data.listInterviews(role.id)).map((i) => i.type)).toEqual([
+      'hiring manager',
+    ])
+    expect((await data.listInterviewers(role.id)).map((c) => c.name)).toEqual([
+      'Morgan Lee',
+    ])
+    expect(await data.getContact(priya.id)).toBeDefined()
+  })
+})
+
+describe('Deleting with Interviews', () => {
+  async function priyaOnTwoRolesInterviews() {
+    const data = await openTestDataLayer()
+    const priya = await data.createContact({ name: 'Priya Shah' })
+    const morgan = await data.createContact({ name: 'Morgan Lee' })
+    const first = await data.createRole({ title: 'Senior QA Engineer' })
+    const second = await data.createRole({ title: 'QA Lead' })
+    await data.createInterview({
+      roleId: first.id,
+      at: '2026-10-20T14:00',
+      type: 'panel',
+      interviewerIds: [priya.id, morgan.id],
+      notes: null,
+      followUpSent: false,
+    })
+    await data.createInterview({
+      roleId: second.id,
+      at: '2026-10-21T09:30',
+      type: 'recruiter screen',
+      interviewerIds: [priya.id],
+      notes: null,
+      followUpSent: false,
+    })
+    return { data, priya, morgan, first, second }
+  }
+
+  it('Given Priya interviewed on two Roles, when she is deleted, then she is on no Interview and is no Role’s Interviewer, and the Interviews and their other Interviewers are kept', async () => {
+    const { data, priya, morgan, first, second } =
+      await priyaOnTwoRolesInterviews()
+
+    await data.deleteContact(priya.id)
+
+    expect(
+      (await data.listInterviews(first.id)).map((i) => [
+        i.type,
+        i.interviewerIds,
+      ]),
+    ).toEqual([['panel', [morgan.id]]])
+    expect(
+      (await data.listInterviews(second.id)).map((i) => [
+        i.type,
+        i.interviewerIds,
+      ]),
+    ).toEqual([['recruiter screen', []]])
+    expect((await data.listInterviewers(first.id)).map((c) => c.name)).toEqual([
+      'Morgan Lee',
+    ])
+    expect(await data.listInterviewers(second.id)).toEqual([])
+  })
+
+  it('Given a Role with an Interview, when the Role is deleted, then its Interviews are gone but the Interviewers and the other Role’s Interviews are kept', async () => {
+    const { data, priya, morgan, first, second } =
+      await priyaOnTwoRolesInterviews()
+
+    await data.deleteRole(first.id)
+
+    expect(await data.listInterviews(first.id)).toEqual([])
+    expect(await data.getContact(priya.id)).toBeDefined()
+    expect(await data.getContact(morgan.id)).toBeDefined()
+    expect((await data.listInterviewers(second.id)).map((c) => c.name)).toEqual(
+      ['Priya Shah'],
+    )
   })
 })
