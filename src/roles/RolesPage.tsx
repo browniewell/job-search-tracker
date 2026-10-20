@@ -5,6 +5,21 @@ import { useDataLayer } from '../dataContext'
 import { DailyPace } from './DailyPace'
 import { RolesTable } from './RolesTable'
 
+/**
+ * Saves text as a file through the browser's download. The byte order mark
+ * tells spreadsheets the file is UTF-8, so text such as "51–200" survives.
+ */
+function download(fileName: string, text: string, type: string) {
+  const url = URL.createObjectURL(new Blob(['\uFEFF', text], { type }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  // Revoked once the click is handled: some browsers cancel the download
+  // when the URL goes away first.
+  setTimeout(() => URL.revokeObjectURL(url))
+}
+
 export function RolesPage() {
   const data = useDataLayer()
   const [roles, setRoles] = useState<Role[] | null>(null)
@@ -33,6 +48,10 @@ export function RolesPage() {
     setRoles(await data.listRoles())
   }
 
+  async function exportCsv() {
+    download('roles.csv', await data.exportRolesCsv(), 'text/csv')
+  }
+
   return (
     <section aria-labelledby="roles-heading">
       <h2 id="roles-heading">Roles</h2>
@@ -45,7 +64,14 @@ export function RolesPage() {
       {roles === null ? null : roles.length === 0 ? (
         <p>No Roles yet. Add the first one above.</p>
       ) : (
-        <RolesTable roles={roles} companies={companies} statuses={statuses} />
+        <>
+          <RolesTable roles={roles} companies={companies} statuses={statuses} />
+          <p>
+            <button type="button" className="secondary" onClick={exportCsv}>
+              Export Roles to CSV
+            </button>
+          </p>
+        </>
       )}
     </section>
   )

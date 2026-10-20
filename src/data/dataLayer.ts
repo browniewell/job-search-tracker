@@ -406,6 +406,71 @@ const byNameThenSiteThenLink = (a: SavedSearch, b: SavedSearch) =>
   byTextIgnoringCase(a.site, b.site) ||
   byTextIgnoringCase(a.link, b.link)
 
+// CSV export of Roles: one row per Role with its Company's fields flattened in.
+// Typed against every field, so a new Company or Role field needs a column here
+// or a decision to leave it out.
+const companyCsvHeaders: Record<Exclude<keyof Company, 'id'>, string> = {
+  name: 'Company',
+  industry: 'Company industry',
+  summary: 'Company summary',
+  website: 'Company website',
+  size: 'Company size',
+  flags: 'Company flags',
+  notes: 'Company notes',
+}
+
+// Ids are left out, and Minimum salary is never exported (GLOSSARY.md).
+const roleCsvHeaders: Record<
+  Exclude<keyof Role, 'id' | 'statusId' | 'companyId' | 'minimumSalary'>,
+  string
+> = {
+  title: 'Role title',
+  location: 'Location',
+  workArrangement: 'Work arrangement',
+  salaryMin: 'Posted salary minimum',
+  salaryMax: 'Posted salary maximum',
+  salaryPeriod: 'Salary period',
+  salaryNote: 'Salary note',
+  expectedSalary: 'Expected salary',
+  roleSummary: 'Role summary',
+  postingLink: 'Posting link',
+  hiringSiteLink: 'Hiring site link',
+  postingDate: 'Posting date',
+  postingCopy: 'Posting copy',
+  postingCopySavedAt: 'Posting copy saved',
+  fitRating: 'Fit rating',
+  fitNotes: 'Fit notes',
+  referralSubmitted: 'Referral submitted',
+  flags: 'Role flags',
+  nextAction: 'Next action',
+  nextActionDate: 'Next action date',
+  parkedReason: 'Parked reason',
+  notes: 'Role notes',
+  createdAt: 'Added',
+}
+
+const fieldsOf = <T extends object>(headers: T) =>
+  Object.keys(headers) as Array<keyof T>
+
+type CsvValue = string | number | boolean | string[] | null
+
+/** A value as one CSV cell, quoted when it holds a comma, quote or line break (RFC 4180). */
+function csvCell(value: CsvValue): string {
+  const text =
+    value === null
+      ? ''
+      : typeof value === 'boolean'
+        ? value
+          ? 'Yes'
+          : 'No'
+        : Array.isArray(value)
+          ? value.join('; ')
+          : String(value)
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+}
+
+const csvLine = (values: CsvValue[]) => values.map(csvCell).join(',') + '\r\n'
+
 type Database = Dexie & {
   statuses: EntityTable<Status, 'id'>
   roles: EntityTable<Role, 'id'>
@@ -526,6 +591,12 @@ export interface DataLayer {
   countApplicationsToday(): Promise<number>
   /** Every Flag used on a Role or Company, each once, by name ignoring case. */
   listFlagSuggestions(): Promise<string[]>
+  /**
+   * Every Role as CSV, one row each in `listRoles` order, with its Status
+   * name and its Company's fields flattened in. Minimum salary is never
+   * included.
+   */
+  exportRolesCsv(): Promise<string>
   /** Whether the Role's Next action date is today or past, by the local calendar day. */
   isNextActionDue(role: Role): boolean
   close(): void
@@ -634,6 +705,9 @@ export async function openDataLayer(options: {
     )
   })
   await db.open()
+
+  const rolesInOrder = async () =>
+    (await db.roles.toArray()).sort(byCreatedThenTitle)
 
   // Each Company appears once: names are unique, ignoring case.
   async function checkCompanyNameIsFree({ id, name }: Company) {
@@ -789,7 +863,7 @@ export async function openDataLayer(options: {
           return role
         },
       ),
-    listRoles: async () => (await db.roles.toArray()).sort(byCreatedThenTitle),
+    listRoles: rolesInOrder,
     getRole: (id) => db.roles.get(id),
     updateRole: (id, changes) =>
       db.transaction('rw', db.roles, db.companies, async () => {
@@ -1116,6 +1190,38 @@ export async function openDataLayer(options: {
     setAppliedStatus: (id) => flagOnlyStatus('isApplied', id),
     // At most one Status is the Parked status.
     setParkedStatus: (id) => flagOnlyStatus('isParked', id),
+    exportRolesCsv: () =>
+      db.transaction('r', db.roles, db.statuses, db.companies, async () => {
+        const statuses = new Map(
+          (await db.statuses.toArray()).map((status) => [status.id, status]),
+        )
+        const companies = new Map(
+          (await db.companies.toArray()).map((company) => [
+            company.id,
+            company,
+          ]),
+        )
+        const { title, ...otherRoleHeaders } = roleCsvHeaders
+        const roleFields = fieldsOf(otherRoleHeaders)
+        const companyFields = fieldsOf(companyCsvHeaders)
+        const rows = (await rolesInOrder()).map((role) => {
+          const company =
+            role.companyId === null ? undefined : companies.get(role.companyId)
+          return csvLine([
+            role.title,
+            statuses.get(role.statusId)?.name ?? null,
+            ...companyFields.map((field) => company?.[field] ?? null),
+            ...roleFields.map((field) => role[field]),
+          ])
+        })
+        const header = csvLine([
+          title,
+          'Status',
+          ...Object.values(companyCsvHeaders),
+          ...Object.values(otherRoleHeaders),
+        ])
+        return header + rows.join('')
+      }),
     listFlagSuggestions: () =>
       db.transaction('r', db.roles, db.companies, async () => {
         const used = [
