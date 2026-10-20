@@ -263,4 +263,24 @@ describe('Daily target', () => {
     )
     expect(await data.getDailyTarget()).toBe(2)
   })
+
+  it('Given setting the Daily target to 0 was refused, when I set it to 3, then the refusal goes and it is 3', async () => {
+    const data = await openTestDataLayer()
+    const user = await openSettings(data)
+    const target = screen.getByRole('spinbutton', { name: 'Daily target' })
+    const save = screen.getByRole('button', { name: 'Save Daily target' })
+    await user.clear(target)
+    await user.type(target, '0')
+    await user.click(save)
+    await screen.findByRole('alert')
+
+    await user.clear(target)
+    await user.type(target, '3')
+    await user.click(save)
+
+    await waitFor(() =>
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
+    )
+    expect(await data.getDailyTarget()).toBe(3)
+  })
 })

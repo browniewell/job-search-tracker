@@ -160,7 +160,7 @@ export function PipelineBoardPage() {
   return (
     <section aria-labelledby="board-heading">
       <h2 id="board-heading">Pipeline board</h2>
-      <DailyPace roles={roles} />
+      <DailyPace recountWhen={roles} />
       <div className="board-options">
         <input
           id={showClosedId}

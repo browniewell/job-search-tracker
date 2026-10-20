@@ -520,8 +520,8 @@ export interface DataLayer {
   setDailyTarget(target: number): Promise<void>
   /**
    * How many Applications were made today, by the local calendar day: Roles
-   * whose first entry into the Applied status, other than Imported entries,
-   * was today.
+   * whose first entry into the Applied status was today, unless that entry
+   * is Imported.
    */
   countApplicationsToday(): Promise<number>
   /** Every Flag used on a Role or Company, each once, by name ignoring case. */
@@ -1145,19 +1145,20 @@ export async function openDataLayer(options: {
     countApplicationsToday: () =>
       db.transaction('r', db.statuses, db.statusHistory, async () => {
         const applied = await db.statuses.filter((s) => s.isApplied).first()
-        // Each Role's first entry into the Applied status, by sequence,
-        // passing over Imported entries.
+        // Each Role's first entry into the Applied status, by sequence.
         const firstByRole = new Map<string, StatusHistoryEntry>()
         for (const entry of await db.statusHistory.toArray()) {
-          if (entry.imported || entry.toStatusId !== applied?.id) continue
+          if (entry.toStatusId !== applied?.id) continue
           const first = firstByRole.get(entry.roleId)
           if (!first || entry.sequence < first.sequence) {
             firstByRole.set(entry.roleId, entry)
           }
         }
         const today = localCalendarDate(options.clock())
+        // A Role first Applied by an import was Applied then, not today.
         return [...firstByRole.values()].filter(
-          (entry) => localCalendarDate(new Date(entry.at)) === today,
+          (entry) =>
+            !entry.imported && localCalendarDate(new Date(entry.at)) === today,
         ).length
       }),
     isNextActionDue: (role) =>

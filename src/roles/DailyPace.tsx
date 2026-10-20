@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { Role } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 
 type Pace = { applications: number; dailyTarget: number }
@@ -19,9 +20,9 @@ function paceMessage({ applications, dailyTarget }: Pace): string {
 
 /**
  * Today's Applications against the Daily target. Counted again whenever
- * `roles` changes, so a page that moves Roles passes them in.
+ * `recountWhen` changes, so a page that moves Roles passes its Roles.
  */
-export function DailyPace({ roles }: { roles?: unknown }) {
+export function DailyPace({ recountWhen }: { recountWhen?: Role[] }) {
   const data = useDataLayer()
   const [pace, setPace] = useState<Pace | null>(null)
 
@@ -35,7 +36,7 @@ export function DailyPace({ roles }: { roles?: unknown }) {
     return () => {
       cancelled = true
     }
-  }, [data, roles])
+  }, [data, recountWhen])
 
   if (pace === null) return null
   return <p className="daily-pace">{paceMessage(pace)}</p>

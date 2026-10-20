@@ -2080,27 +2080,50 @@ describe("Today's Applications", () => {
 
     expect(await data.countApplicationsToday()).toBe(1)
   })
-  // Nothing makes Imported entries yet, so the test writes one as an import would.
-  it('Given a Role whose entry into the Applied status today is Imported, then today has no Applications', async () => {
-    const name = uniqueDatabaseName()
-    const { data, idOf } = await openWithClock(name)
-    const role = await data.createRole({ title: 'Senior QA Engineer' })
+  // Nothing makes Imported entries yet, so the test writes one into the
+  // Applied status as an import would, after the Role's first entry.
+  async function importApplication(name: string, roleId: string, at: Date) {
     const raw = await new Dexie(name).open()
+    const statuses = await raw.table('statuses').toArray()
+    const idOf = (n: string) => statuses.find((s) => s.name === n).id
     await raw.table('statusHistory').add({
       id: 'imported-entry',
-      roleId: role.id,
+      roleId,
       fromStatusId: idOf('Interested'),
       fromStatusName: 'Interested',
       toStatusId: idOf('Applied'),
       toStatusName: 'Applied',
-      at: morningOfOct16.toISOString(),
+      at: at.toISOString(),
       imported: true,
       sequence: 1,
     })
     raw.close()
+  }
+
+  it('Given a Role whose entry into the Applied status today is Imported, then today has no Applications', async () => {
+    const name = uniqueDatabaseName()
+    const { data } = await openWithClock(name)
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+
+    await importApplication(name, role.id, morningOfOct16)
 
     expect(await data.countApplicationsToday()).toBe(0)
   })
+
+  it('Given a Role Imported into the Applied status yesterday, when it enters the Applied status again today, then today has no Applications', async () => {
+    const name = uniqueDatabaseName()
+    const { data, clock, idOf } = await openWithClock(name)
+    const yesterday = new Date('2026-10-15T14:30:00.000Z')
+    clock.now = yesterday
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    await importApplication(name, role.id, yesterday)
+    clock.now = morningOfOct16
+
+    await data.changeStatus(role.id, idOf('Applied'))
+
+    expect(await data.countApplicationsToday()).toBe(0)
+  })
+
   it('Given the Applied status is renamed Submitted, when a Role first enters Submitted today, then today has 1 Application', async () => {
     const { data, idOf } = await openWithClock()
     const role = await data.createRole({ title: 'Senior QA Engineer' })

@@ -18,7 +18,7 @@ type BooleanField<V> = {
 /**
  * State and labelled controls for an edit form. Text controls hold strings;
  * the form turns them into stored fields on save. A failed save shows the
- * data layer's error in `errorMessage`.
+ * data layer's error in `errorMessage` until a save succeeds.
  */
 export function useEditForm<V extends object>(
   initial: () => V,
@@ -37,6 +37,7 @@ export function useEditForm<V extends object>(
     event.preventDefault()
     try {
       await onSave(values)
+      setError(null)
     } catch (cause) {
       setError(messageOf(cause))
     }

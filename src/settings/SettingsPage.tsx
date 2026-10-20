@@ -3,6 +3,7 @@ import { AddByNameForm } from '../components/AddByNameForm'
 import { ConfirmDelete } from '../components/ConfirmDelete'
 import { FormRow } from '../components/FormRow'
 import { StatusOptions } from '../components/StatusOptions'
+import { useEditForm } from '../components/useEditForm'
 import {
   appliedStatusDeleteMessage,
   statusHasRolesMessage,
@@ -53,41 +54,19 @@ function RenameStatusForm({
 
 function DailyTargetForm({ saved }: { saved: number }) {
   const data = useDataLayer()
-  const [target, setTarget] = useState(String(saved))
-  const [error, setError] = useState<string | null>(null)
+  const form = useEditForm(
+    () => ({ dailyTarget: String(saved) }),
+    ({ dailyTarget }) => data.setDailyTarget(Number(dailyTarget)),
+  )
   return (
     <section aria-labelledby="daily-target-heading">
       <h3 id="daily-target-heading">Daily target</h3>
-      {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
-      )}
-      <form
-        onSubmit={async (event) => {
-          event.preventDefault()
-          try {
-            await data.setDailyTarget(Number(target))
-            setError(null)
-          } catch (cause) {
-            setError(errorMessage(cause))
-          }
-        }}
-      >
-        <FormRow
-          id="daily-target"
-          label="Daily target"
-          hint="How many Applications you aim to make per day."
-        >
-          <input
-            id="daily-target"
-            type="number"
-            inputMode="numeric"
-            aria-describedby="daily-target-hint"
-            value={target}
-            onChange={(event) => setTarget(event.target.value)}
-          />
-        </FormRow>
+      {form.errorMessage}
+      <form onSubmit={form.submit}>
+        {form.textInput('dailyTarget', 'Daily target', {
+          type: 'number',
+          hint: 'How many Applications you aim to make per day.',
+        })}
         <div className="form-actions">
           <button type="submit">Save Daily target</button>
         </div>
