@@ -24,6 +24,7 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 
 - **Two seams only:** the data-layer interface, and the rendered `<App>` over the real data layer on fake-indexeddb. Playwright covers flows that need a real browser. Tests use our own modules for real, never mocked.
 - **Given/When/Then names in glossary terms**, stating behaviour a user would recognise. A test of state that is simply there, such as seeded Statuses or a list's order, is named Given/Then: the When is the action under test, and such a test has none.
+- **Wait for the change itself.** After an action, a test waits for something the action makes appear, or `waitFor`s something to go. A `findBy` for an element already on screen returns at once, before the action has landed, so the next assertion races the reload; `npm run test:repeat` in CI catches some of these, the rest only under load.
 - **Red first.** A test that passed on its first run (a tripwire, an upgrade written before its test) is backed by a check: break the code, see the test fail, restore it. Note it in the PR's evidence.
 
 ## UI

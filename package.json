@@ -11,6 +11,7 @@
     "format": "prettier --write .",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:repeat": "vitest run --repeats 5",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "check": "tsc -b && eslint . && prettier --check ."
