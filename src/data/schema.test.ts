@@ -9,7 +9,7 @@ import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
 // an entry that has reached main stays as it is.
 // Every table is recorded from v5 on; v4 recorded Roles and Companies only.
 // v8 adds Contacts and Role contacts; v9 adds Interviews; v10 adds Saved
-// searches.
+// searches; v11 adds Settings.
 const entityByTable = {
   roles: 'role',
   companies: 'company',
@@ -19,6 +19,7 @@ const entityByTable = {
   roleContacts: 'roleContact',
   interviews: 'interview',
   savedSearches: 'savedSearch',
+  settings: 'settings',
 } as const
 type Entity = (typeof entityByTable)[keyof typeof entityByTable]
 
@@ -412,6 +413,81 @@ const storedFields: Record<number, Partial<Record<Entity, string[]>>> = {
       'type',
     ],
     savedSearch: ['id', 'lastCheckedAt', 'link', 'name', 'site'],
+  },
+  11: {
+    role: [
+      'companyId',
+      'createdAt',
+      'expectedSalary',
+      'fitNotes',
+      'fitRating',
+      'flags',
+      'hiringSiteLink',
+      'id',
+      'location',
+      'minimumSalary',
+      'nextAction',
+      'nextActionDate',
+      'notes',
+      'parkedReason',
+      'postingCopy',
+      'postingCopySavedAt',
+      'postingDate',
+      'postingLink',
+      'referralSubmitted',
+      'roleSummary',
+      'salaryMax',
+      'salaryMin',
+      'salaryNote',
+      'salaryPeriod',
+      'statusId',
+      'title',
+      'workArrangement',
+    ],
+    company: [
+      'flags',
+      'id',
+      'industry',
+      'name',
+      'notes',
+      'size',
+      'summary',
+      'website',
+    ],
+    statusHistoryEntry: [
+      'at',
+      'fromStatusId',
+      'fromStatusName',
+      'id',
+      'imported',
+      'roleId',
+      'sequence',
+      'toStatusId',
+      'toStatusName',
+    ],
+    status: ['closed', 'id', 'isApplied', 'isParked', 'name', 'order'],
+    contact: [
+      'companyId',
+      'email',
+      'howYouKnow',
+      'id',
+      'linkedIn',
+      'name',
+      'notes',
+      'title',
+    ],
+    roleContact: ['contactId', 'id', 'roleId', 'type'],
+    interview: [
+      'at',
+      'followUpSent',
+      'id',
+      'interviewerIds',
+      'notes',
+      'roleId',
+      'type',
+    ],
+    savedSearch: ['id', 'lastCheckedAt', 'link', 'name', 'site'],
+    settings: ['dailyTarget', 'id'],
   },
 }
 

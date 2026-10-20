@@ -25,6 +25,7 @@ import {
 } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 import { CompanyNotDisclosed } from './CompanyNotDisclosed'
+import { DailyPace } from './DailyPace'
 import { formatCalendarDate } from '../format'
 import { errorMessage } from '../errorMessage'
 
@@ -159,6 +160,7 @@ export function PipelineBoardPage() {
   return (
     <section aria-labelledby="board-heading">
       <h2 id="board-heading">Pipeline board</h2>
+      <DailyPace roles={roles} />
       <div className="board-options">
         <input
           id={showClosedId}

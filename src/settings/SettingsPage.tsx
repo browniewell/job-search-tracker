@@ -51,30 +51,79 @@ function RenameStatusForm({
   )
 }
 
+function DailyTargetForm({ saved }: { saved: number }) {
+  const data = useDataLayer()
+  const [target, setTarget] = useState(String(saved))
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <section aria-labelledby="daily-target-heading">
+      <h3 id="daily-target-heading">Daily target</h3>
+      {error && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault()
+          try {
+            await data.setDailyTarget(Number(target))
+            setError(null)
+          } catch (cause) {
+            setError(errorMessage(cause))
+          }
+        }}
+      >
+        <FormRow
+          id="daily-target"
+          label="Daily target"
+          hint="How many Applications you aim to make per day."
+        >
+          <input
+            id="daily-target"
+            type="number"
+            inputMode="numeric"
+            aria-describedby="daily-target-hint"
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
+          />
+        </FormRow>
+        <div className="form-actions">
+          <button type="submit">Save Daily target</button>
+        </div>
+      </form>
+    </section>
+  )
+}
+
 export function SettingsPage() {
   const data = useDataLayer()
   const [statuses, setStatuses] = useState<Status[] | null>(null)
   const [roles, setRoles] = useState<Role[]>([])
+  const [dailyTarget, setDailyTarget] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([data.listStatuses(), data.listRoles()]).then(
-      ([loadedStatuses, loadedRoles]) => {
-        if (!cancelled) {
-          setStatuses(loadedStatuses)
-          setRoles(loadedRoles)
-        }
-      },
-    )
+    Promise.all([
+      data.listStatuses(),
+      data.listRoles(),
+      data.getDailyTarget(),
+    ]).then(([loadedStatuses, loadedRoles, loadedDailyTarget]) => {
+      if (!cancelled) {
+        setStatuses(loadedStatuses)
+        setRoles(loadedRoles)
+        setDailyTarget(loadedDailyTarget)
+      }
+    })
     return () => {
       cancelled = true
     }
   }, [data])
 
-  if (statuses === null) return null
+  if (statuses === null || dailyTarget === null) return null
 
   // Every change shows the data layer's own message if it is refused, then
   // the Statuses as they are now saved. Resolves to whether it was made.
@@ -262,6 +311,7 @@ export function SettingsPage() {
           onAdd={(name) => saveAndReload(() => data.createStatus({ name }))}
         />
       </section>
+      <DailyTargetForm saved={dailyTarget} />
     </section>
   )
 }

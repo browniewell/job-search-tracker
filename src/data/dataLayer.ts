@@ -239,6 +239,16 @@ export interface StatusHistoryEntry {
   sequence: number
 }
 
+// Settings are one record, saved with every field like any other.
+const settingsId = 'settings'
+export interface Settings {
+  id: typeof settingsId
+  /** How many Applications you aim to make per day. */
+  dailyTarget: number
+}
+
+const defaultSettings: Settings = { id: settingsId, dailyTarget: 2 }
+
 const defaultStatuses: Array<
   Pick<Status, 'name' | 'closed' | 'isApplied' | 'isParked'>
 > = [
@@ -405,6 +415,7 @@ type Database = Dexie & {
   roleContacts: EntityTable<RoleContact, 'id'>
   interviews: EntityTable<Interview, 'id'>
   savedSearches: EntityTable<SavedSearch, 'id'>
+  settings: EntityTable<Settings, 'id'>
 }
 
 export interface DataLayer {
@@ -503,6 +514,16 @@ export interface DataLayer {
   setAppliedStatus(id: string): Promise<void>
   /** Makes a Status the Parked status, or none when null. */
   setParkedStatus(id: string | null): Promise<void>
+  /** How many Applications you aim to make per day; 2 until you change it. */
+  getDailyTarget(): Promise<number>
+  /** Sets the Daily target: a whole number, 1 or more. */
+  setDailyTarget(target: number): Promise<void>
+  /**
+   * How many Applications were made today, by the local calendar day: Roles
+   * whose first entry into the Applied status, other than Imported entries,
+   * was today.
+   */
+  countApplicationsToday(): Promise<number>
   /** Every Flag used on a Role or Company, each once, by name ignoring case. */
   listFlagSuggestions(): Promise<string[]>
   /** Whether the Role's Next action date is today or past, by the local calendar day. */
@@ -598,7 +619,12 @@ export async function openDataLayer(options: {
   db.version(9).stores({ interviews: 'id, roleId, *interviewerIds' })
   // v10 adds Saved searches.
   db.version(10).stores({ savedSearches: 'id' })
+  // v11 adds Settings, starting with the Daily target.
+  db.version(11)
+    .stores({ settings: 'id' })
+    .upgrade((tx) => tx.table('settings').add(defaultSettings))
   db.on('populate', (tx) => {
+    tx.table('settings').add(defaultSettings)
     tx.table('statuses').bulkAdd(
       defaultStatuses.map((status, order) => ({
         id: newId(),
@@ -1106,6 +1132,33 @@ export async function openDataLayer(options: {
               b.localeCompare(a),
           ),
         )
+      }),
+    // The record is added with the database, or by the v11 upgrade.
+    getDailyTarget: async () =>
+      (await db.settings.get(settingsId))!.dailyTarget,
+    setDailyTarget: async (target) => {
+      if (!Number.isInteger(target) || target < 1) {
+        throw new Error('A Daily target is a whole number, 1 or more')
+      }
+      await db.settings.update(settingsId, { dailyTarget: target })
+    },
+    countApplicationsToday: () =>
+      db.transaction('r', db.statuses, db.statusHistory, async () => {
+        const applied = await db.statuses.filter((s) => s.isApplied).first()
+        // Each Role's first entry into the Applied status, by sequence,
+        // passing over Imported entries.
+        const firstByRole = new Map<string, StatusHistoryEntry>()
+        for (const entry of await db.statusHistory.toArray()) {
+          if (entry.imported || entry.toStatusId !== applied?.id) continue
+          const first = firstByRole.get(entry.roleId)
+          if (!first || entry.sequence < first.sequence) {
+            firstByRole.set(entry.roleId, entry)
+          }
+        }
+        const today = localCalendarDate(options.clock())
+        return [...firstByRole.values()].filter(
+          (entry) => localCalendarDate(new Date(entry.at)) === today,
+        ).length
       }),
     isNextActionDue: (role) =>
       role.nextActionDate !== null &&

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AddByNameForm } from '../components/AddByNameForm'
 import type { Company, Role, Status } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
+import { DailyPace } from './DailyPace'
 import { RolesTable } from './RolesTable'
 
 export function RolesPage() {
@@ -35,6 +36,7 @@ export function RolesPage() {
   return (
     <section aria-labelledby="roles-heading">
       <h2 id="roles-heading">Roles</h2>
+      <DailyPace />
       <AddByNameForm
         label="Role title"
         buttonLabel="Add Role"
