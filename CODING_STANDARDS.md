@@ -4,7 +4,7 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 
 ## Code
 
-- **Extend, don't copy.** New code shaped like an existing helper generalises that helper and calls it from both places. Compare the diff with the code already in the repo, not only with itself: `checkStatusNameIsFree` copied `checkCompanyNameIsFree`, and `statusHasRolesMessage` copied the "1 Role, it / N Roles, them" wording of `companyHasRolesMessage`.
+- **Extend, don't copy.** New code shaped like existing code, whether a helper or another test's steps, generalises it into one helper called from both places. Compare the diff with the code already in the repo, not only with itself: `checkStatusNameIsFree` copied `checkCompanyNameIsFree`, `statusHasRolesMessage` copied the "1 Role, it / N Roles, them" wording of `companyHasRolesMessage`, and a board spec copied another's keyboard move before it became `moveByKeyboard`.
 
 ## Stored data
 
@@ -24,6 +24,7 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 
 - **Two seams only:** the data-layer interface, and the rendered `<App>` over the real data layer on fake-indexeddb. Playwright covers flows that need a real browser. Tests use our own modules for real, never mocked.
 - **Given/When/Then names in glossary terms**, stating behaviour a user would recognise. A test of state that is simply there, such as seeded Statuses or a list's order, is named Given/Then: the When is the action under test, and such a test has none.
+- **Wait for the change itself.** After an action, a test waits for something the action makes appear, or `waitFor`s something to go. A `findBy` for an element already on screen returns at once, before the action has landed, so the next assertion races the reload; `npm run test:repeat` in CI catches some of these, the rest only under load.
 - **Red first.** A test that passed on its first run (a tripwire, an upgrade written before its test) is backed by a check: break the code, see the test fail, restore it. Note it in the PR's evidence.
 
 ## UI

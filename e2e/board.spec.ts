@@ -1,10 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
 
-/** Adds a Role through the UI and moves it to Applied on its detail page. */
-async function addAppliedRole(page: Page, title: string) {
+/** Adds a Role through the UI, in the first Status. */
+async function addRole(page: Page, title: string) {
   await page.goto('/')
   await page.getByLabel('Role title').fill(title)
   await page.getByRole('button', { name: 'Add Role' }).click()
+}
+
+/** Adds a Role through the UI and moves it to Applied on its detail page. */
+async function addAppliedRole(page: Page, title: string) {
+  await addRole(page, title)
   await page.getByRole('link', { name: title }).click()
   await page
     .getByRole('form', { name: 'Change Status' })
@@ -16,6 +21,31 @@ async function addAppliedRole(page: Page, title: string) {
 
 const column = (page: Page, statusName: string) =>
   page.getByRole('region', { name: statusName, exact: true })
+
+/**
+ * Moves a card on the Pipeline board with the keyboard: picks it up in its
+ * Status, presses → once for each Status in `over`, waiting to be over each,
+ * and drops it in the last.
+ */
+async function moveByKeyboard(
+  page: Page,
+  title: string,
+  from: string,
+  over: string[],
+) {
+  const announcement = page.getByRole('status').filter({ hasText: /\S/ })
+  await page.getByRole('button', { name: `Move ${title}` }).focus()
+  await page.keyboard.press('Space')
+  await expect(announcement).toHaveText(`${title} is over ${from}.`)
+  // dnd-kit starts listening for arrow keys on a timer once a card is picked
+  // up; a timer queued now runs after it.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve)))
+  for (const statusName of over) {
+    await page.keyboard.press('ArrowRight')
+    await expect(announcement).toHaveText(`${title} is over ${statusName}.`)
+  }
+  await page.keyboard.press('Space')
+}
 
 /**
  * After the move: the card sits in Recruiter Screen, and Status history
@@ -70,18 +100,9 @@ test("Given a Role in Applied, when it's moved to Recruiter Screen with the keyb
   await addAppliedRole(page, 'Senior QA Engineer')
   const movedAfter = new Date()
 
-  const announcement = page.getByRole('status').filter({ hasText: /\S/ })
-  await page.getByRole('button', { name: 'Move Senior QA Engineer' }).focus()
-  await page.keyboard.press('Space')
-  await expect(announcement).toHaveText('Senior QA Engineer is over Applied.')
-  // dnd-kit starts listening for arrow keys on a timer once a card is picked
-  // up; a timer queued now runs after it.
-  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve)))
-  await page.keyboard.press('ArrowRight')
-  await expect(announcement).toHaveText(
-    'Senior QA Engineer is over Recruiter Screen.',
-  )
-  await page.keyboard.press('Space')
+  await moveByKeyboard(page, 'Senior QA Engineer', 'Applied', [
+    'Recruiter Screen',
+  ])
 
   await expectMovedToRecruiterScreen(page, 'Senior QA Engineer', movedAfter)
 })
@@ -89,21 +110,14 @@ test("Given a Role in Applied, when it's moved to Recruiter Screen with the keyb
 test("Given a Role in Interested, when it's moved to Applied on the Pipeline board, then today's Applications count it at once", async ({
   page,
 }) => {
-  await page.goto('/')
-  await page.getByLabel('Role title').fill('Senior QA Engineer')
-  await page.getByRole('button', { name: 'Add Role' }).click()
+  await addRole(page, 'Senior QA Engineer')
   await page.getByRole('link', { name: 'Pipeline board' }).click()
   await expect(page.getByText('0 of 2 today, a fresh start')).toBeVisible()
 
-  const announcement = page.getByRole('status').filter({ hasText: /\S/ })
-  await page.getByRole('button', { name: 'Move Senior QA Engineer' }).focus()
-  await page.keyboard.press('Space')
-  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve)))
-  await page.keyboard.press('ArrowRight')
-  await expect(announcement).toHaveText('Senior QA Engineer is over Parked.')
-  await page.keyboard.press('ArrowRight')
-  await expect(announcement).toHaveText('Senior QA Engineer is over Applied.')
-  await page.keyboard.press('Space')
+  await moveByKeyboard(page, 'Senior QA Engineer', 'Interested', [
+    'Parked',
+    'Applied',
+  ])
 
   await expect(page.getByText('1 of 2 today, good going')).toBeVisible()
 })

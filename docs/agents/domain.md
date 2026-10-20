@@ -49,3 +49,11 @@ If the concept you need isn't in the glossary yet, that's a signal: either you'r
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
 > _Contradicts ADR-0007 (event-sourced orders), but worth reopening because…_
+
+## Flag glossary conflicts
+
+When an issue or spec uses a glossary term in a different sense from `GLOSSARY.md`, build to the glossary's meaning and say so in the PR, quoting both:
+
+> _The issue counts the "first-ever non-Imported entry"; GLOSSARY.md's Application is the first entry into the Applied status, so a Role first Applied by an import doesn't count later. Built to the glossary._
+
+Where the glossary is silent on the case, ask before building, and record the answer in `GLOSSARY.md` in the same PR.

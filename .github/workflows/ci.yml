@@ -24,10 +24,12 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      # Unit tests affected by the change run again, five times, so a test
-      # that passes only by timing (such as reading a section before it has
-      # loaded) fails here rather than weeks later.
-      - run: npx vitest run --changed origin/main --repeats 5 --passWithNoTests
+      # The whole unit suite runs again, five times, so a test that passes
+      # only by timing (such as reading a section before it has loaded) fails
+      # here rather than weeks later. All of it, not just the changed tests:
+      # a race can wait for other tests to add load (two Saved searches tests
+      # passed their own PR and failed on #13's).
+      - run: npm run test:repeat
       - run: npm run build
       # Browsers are cached per Playwright version; a hit still needs the
       # system libraries, which live outside the cache.
