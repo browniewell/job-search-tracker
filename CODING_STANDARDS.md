@@ -4,7 +4,7 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 
 ## Code
 
-- **Extend, don't copy.** New code shaped like an existing helper generalises that helper and calls it from both places. Compare the diff with the code already in the repo, not only with itself: `checkStatusNameIsFree` copied `checkCompanyNameIsFree`, and `statusHasRolesMessage` copied the "1 Role, it / N Roles, them" wording of `companyHasRolesMessage`.
+- **Extend, don't copy.** New code shaped like existing code, whether a helper or another test's steps, generalises it into one helper called from both places. Compare the diff with the code already in the repo, not only with itself: `checkStatusNameIsFree` copied `checkCompanyNameIsFree`, `statusHasRolesMessage` copied the "1 Role, it / N Roles, them" wording of `companyHasRolesMessage`, and a board spec copied another's keyboard move before it became `moveByKeyboard`.
 
 ## Stored data
 
