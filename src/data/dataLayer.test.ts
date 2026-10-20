@@ -2154,7 +2154,7 @@ describe("Today's Applications", () => {
 
 describe('CSV export of Roles', () => {
   const header =
-    'Role title,Status,Company,Company industry,Company summary,Company website,Company size,Company flags,Company notes,Location,Work arrangement,Posted salary min,Posted salary max,Salary period,Salary note,Expected salary,Role summary,Posting link,Hiring site link,Posting date,Posting copy,Posting copy saved,Fit rating,Fit notes,Referral submitted,Role flags,Next action,Next action date,Parked reason,Role notes,Added'
+    'Role title,Status,Company,Company industry,Company summary,Company website,Company size,Company flags,Company notes,Location,Work arrangement,Posted salary minimum,Posted salary maximum,Salary period,Salary note,Expected salary,Role summary,Posting link,Hiring site link,Posting date,Posting copy,Posting copy saved,Fit rating,Fit notes,Referral submitted,Role flags,Next action,Next action date,Parked reason,Role notes,Added'
 
   it('Given a Role with every field filled at a Company, when Roles are exported to CSV, then its row has the Role and Company fields and no Minimum salary', async () => {
     const data = await openTestDataLayer()
@@ -2241,8 +2241,8 @@ describe('CSV export of Roles', () => {
     const data = await openTestDataLayer({ clock: () => now })
     await data.createRole({ title: 'Zeta' })
     now = new Date('2026-10-16T09:01:00.000Z')
-    await data.createRole({ title: 'Alpha' })
-    await data.createRole({ title: 'beta' })
+    await data.createRole({ title: 'alpha' })
+    await data.createRole({ title: 'Beta' })
 
     const csv = await data.exportRolesCsv()
 
@@ -2250,6 +2250,6 @@ describe('CSV export of Roles', () => {
       .split('\r\n')
       .slice(1, -1)
       .map((line) => line.split(',')[0])
-    expect(titles).toEqual(['Zeta', 'Alpha', 'beta'])
+    expect(titles).toEqual(['Zeta', 'alpha', 'Beta'])
   })
 })

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
+import { addRole } from './seed.ts'
 
 test('Given the production build, when I add a Role, then it is listed and survives a reload', async ({
   page,
@@ -73,12 +74,8 @@ test('Given I filter and sort the Roles table, when I open a Role, go back and r
 test('Given a Role, when I export Roles to CSV, then a CSV file downloads with its row', async ({
   page,
 }) => {
+  await addRole(page, 'QA Lead, Platform')
   await page.goto('/')
-  await page.getByLabel('Role title').fill('QA Lead, Platform')
-  await page.getByRole('button', { name: 'Add Role' }).click()
-  await expect(
-    page.getByRole('link', { name: 'QA Lead, Platform' }),
-  ).toBeVisible()
 
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export Roles to CSV' }).click()

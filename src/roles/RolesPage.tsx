@@ -15,7 +15,9 @@ function download(fileName: string, text: string, type: string) {
   link.href = url
   link.download = fileName
   link.click()
-  URL.revokeObjectURL(url)
+  // Revoked once the click is handled: some browsers cancel the download
+  // when the URL goes away first.
+  setTimeout(() => URL.revokeObjectURL(url))
 }
 
 export function RolesPage() {

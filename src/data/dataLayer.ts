@@ -427,8 +427,8 @@ const roleCsvHeaders: Record<
   title: 'Role title',
   location: 'Location',
   workArrangement: 'Work arrangement',
-  salaryMin: 'Posted salary min',
-  salaryMax: 'Posted salary max',
+  salaryMin: 'Posted salary minimum',
+  salaryMax: 'Posted salary maximum',
   salaryPeriod: 'Salary period',
   salaryNote: 'Salary note',
   expectedSalary: 'Expected salary',
@@ -706,6 +706,9 @@ export async function openDataLayer(options: {
   })
   await db.open()
 
+  const rolesInOrder = async () =>
+    (await db.roles.toArray()).sort(byCreatedThenTitle)
+
   // Each Company appears once: names are unique, ignoring case.
   async function checkCompanyNameIsFree({ id, name }: Company) {
     const lower = name.toLocaleLowerCase()
@@ -860,7 +863,7 @@ export async function openDataLayer(options: {
           return role
         },
       ),
-    listRoles: async () => (await db.roles.toArray()).sort(byCreatedThenTitle),
+    listRoles: rolesInOrder,
     getRole: (id) => db.roles.get(id),
     updateRole: (id, changes) =>
       db.transaction('rw', db.roles, db.companies, async () => {
@@ -1201,20 +1204,16 @@ export async function openDataLayer(options: {
         const { title, ...otherRoleHeaders } = roleCsvHeaders
         const roleFields = fieldsOf(otherRoleHeaders)
         const companyFields = fieldsOf(companyCsvHeaders)
-        const rows = (await db.roles.toArray())
-          .sort(byCreatedThenTitle)
-          .map((role) => {
-            const company =
-              role.companyId === null
-                ? undefined
-                : companies.get(role.companyId)
-            return csvLine([
-              role.title,
-              statuses.get(role.statusId)?.name ?? null,
-              ...companyFields.map((field) => company?.[field] ?? null),
-              ...roleFields.map((field) => role[field]),
-            ])
-          })
+        const rows = (await rolesInOrder()).map((role) => {
+          const company =
+            role.companyId === null ? undefined : companies.get(role.companyId)
+          return csvLine([
+            role.title,
+            statuses.get(role.statusId)?.name ?? null,
+            ...companyFields.map((field) => company?.[field] ?? null),
+            ...roleFields.map((field) => role[field]),
+          ])
+        })
         const header = csvLine([
           title,
           'Status',
