@@ -2151,3 +2151,105 @@ describe("Today's Applications", () => {
     expect(await data.countApplicationsToday()).toBe(2)
   })
 })
+
+describe('CSV export of Roles', () => {
+  const header =
+    'Role title,Status,Company,Company industry,Company summary,Company website,Company size,Company flags,Company notes,Location,Work arrangement,Posted salary min,Posted salary max,Salary period,Salary note,Expected salary,Role summary,Posting link,Hiring site link,Posting date,Posting copy,Posting copy saved,Fit rating,Fit notes,Referral submitted,Role flags,Next action,Next action date,Parked reason,Role notes,Added'
+
+  it('Given a Role with every field filled at a Company, when Roles are exported to CSV, then its row has the Role and Company fields and no Minimum salary', async () => {
+    const data = await openTestDataLayer()
+    const company = await data.createCompany({ name: 'Acme' })
+    await data.updateCompany(company.id, {
+      industry: 'Logistics',
+      summary: 'Freight software',
+      website: 'https://acme.example',
+      size: '51-200',
+      flags: ['Data monetization'],
+      notes: 'Met at meetup',
+    })
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    await data.updateRole(role.id, {
+      companyId: company.id,
+      location: 'Chicago IL',
+      workArrangement: 'hybrid',
+      salaryMin: 120000,
+      salaryMax: 145000.5,
+      salaryPeriod: 'annual',
+      salaryNote: 'OTE',
+      expectedSalary: 135000,
+      minimumSalary: 987654,
+      roleSummary: 'Owns test strategy',
+      postingLink: 'https://linkedin.example/1',
+      hiringSiteLink: 'https://acme.example/jobs/1',
+      postingDate: '2026-10-01',
+      postingCopy: 'We are hiring',
+      fitNotes: 'Strong match',
+      fitRating: 4,
+      referralSubmitted: true,
+      flags: ['Workday portal', 'Unpaid take-home'],
+      nextAction: 'Email recruiter',
+      nextActionDate: '2026-10-20',
+      parkedReason: 'Too far',
+      notes: 'Promising',
+    })
+
+    const csv = await data.exportRolesCsv()
+
+    expect(csv).toBe(
+      header +
+        '\r\n' +
+        'Senior QA Engineer,Interested,Acme,Logistics,Freight software,https://acme.example,51-200,Data monetization,Met at meetup,Chicago IL,hybrid,120000,145000.5,annual,OTE,135000,Owns test strategy,https://linkedin.example/1,https://acme.example/jobs/1,2026-10-01,We are hiring,2026-10-16T14:30:00.000Z,4,Strong match,Yes,Workday portal; Unpaid take-home,Email recruiter,2026-10-20,Too far,Promising,2026-10-16T14:30:00.000Z\r\n',
+    )
+    expect(csv).not.toContain('987654')
+  })
+  it('Given Role values with commas, quotes and line breaks, when Roles are exported to CSV, then those cells are quoted with inner quotes doubled', async () => {
+    const data = await openTestDataLayer()
+    const role = await data.createRole({ title: 'QA Lead, Platform' })
+    await data.updateRole(role.id, {
+      roleSummary: 'Owns the "quality" bar',
+      postingCopy: 'Line one\nLine two\r\nLine three',
+      notes: 'No specials here',
+    })
+
+    const csv = await data.exportRolesCsv()
+
+    const added = '2026-10-16T14:30:00.000Z'
+    const row = [
+      '"QA Lead, Platform"',
+      'Interested',
+      ...Array(14).fill(''),
+      '"Owns the ""quality"" bar"',
+      '',
+      '',
+      '',
+      '"Line one\nLine two\r\nLine three"',
+      added,
+      '',
+      '',
+      'No',
+      '',
+      '',
+      '',
+      '',
+      'No specials here',
+      added,
+    ]
+    expect(csv).toBe(`${header}\r\n${row.join(',')}\r\n`)
+  })
+  it('Given Roles created one after another and two at the same moment, then the export lists them in the order created, then by Role title ignoring case', async () => {
+    let now = new Date('2026-10-16T09:00:00.000Z')
+    const data = await openTestDataLayer({ clock: () => now })
+    await data.createRole({ title: 'Zeta' })
+    now = new Date('2026-10-16T09:01:00.000Z')
+    await data.createRole({ title: 'Alpha' })
+    await data.createRole({ title: 'beta' })
+
+    const csv = await data.exportRolesCsv()
+
+    const titles = csv
+      .split('\r\n')
+      .slice(1, -1)
+      .map((line) => line.split(',')[0])
+    expect(titles).toEqual(['Zeta', 'Alpha', 'beta'])
+  })
+})
