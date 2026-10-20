@@ -1,16 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
-
-/** Adds a Role through the UI, in the first Status. */
-async function addRole(page: Page, title: string) {
-  await page.goto('/')
-  await page.getByLabel('Role title').fill(title)
-  await page.getByRole('button', { name: 'Add Role' }).click()
-}
+import { addRole } from './seed.ts'
 
 /** Adds a Role through the UI and moves it to Applied on its detail page. */
 async function addAppliedRole(page: Page, title: string) {
   await addRole(page, title)
-  await page.getByRole('link', { name: title }).click()
   await page
     .getByRole('form', { name: 'Change Status' })
     .getByLabel('Status')

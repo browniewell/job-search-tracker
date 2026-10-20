@@ -1,14 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
-import { addRole } from './seed.ts'
+import { addRole, addRoleToList } from './seed.ts'
 
 test('Given the production build, when I add a Role, then it is listed and survives a reload', async ({
   page,
 }) => {
-  await page.goto('/')
-
-  await page.getByLabel('Role title').fill('Senior QA Engineer')
-  await page.getByRole('button', { name: 'Add Role' }).click()
+  await addRoleToList(page, 'Senior QA Engineer')
 
   const roles = page.getByRole('table', { name: 'Roles' })
   await expect(roles).toContainText('Senior QA Engineer')
@@ -20,10 +17,7 @@ test('Given the production build, when I add a Role, then it is listed and survi
 test('Given a Role, when I edit it on its detail page and reload, then the edit is kept', async ({
   page,
 }) => {
-  await page.goto('/')
-  await page.getByLabel('Role title').fill('QA Engineer')
-  await page.getByRole('button', { name: 'Add Role' }).click()
-  await page.getByRole('link', { name: 'QA Engineer' }).click()
+  await addRole(page, 'QA Engineer')
 
   await page.getByRole('button', { name: 'Edit' }).click()
   await page.getByLabel('Location').fill('Chicago, IL')
@@ -41,12 +35,9 @@ test('Given a Role, when I edit it on its detail page and reload, then the edit 
 test('Given I filter and sort the Roles table, when I open a Role, go back and reload, then the filter and sort are kept', async ({
   page,
 }) => {
-  await page.goto('/')
   const roles = page.getByRole('table', { name: 'Roles' })
   for (const title of ['QA Engineer', 'SDET', 'Test Lead']) {
-    await page.getByLabel('Role title').fill(title)
-    await page.getByRole('button', { name: 'Add Role' }).click()
-    await expect(roles.getByRole('link', { name: title })).toBeVisible()
+    await addRoleToList(page, title)
   }
   await page.getByRole('link', { name: 'SDET' }).click()
   await page.getByRole('button', { name: 'Edit' }).click()
@@ -74,8 +65,7 @@ test('Given I filter and sort the Roles table, when I open a Role, go back and r
 test('Given a Role, when I export Roles to CSV, then a CSV file downloads with its row', async ({
   page,
 }) => {
-  await addRole(page, 'QA Lead, Platform')
-  await page.goto('/')
+  await addRoleToList(page, 'QA Lead, Platform')
 
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export Roles to CSV' }).click()
