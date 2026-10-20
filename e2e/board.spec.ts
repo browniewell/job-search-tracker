@@ -85,3 +85,25 @@ test("Given a Role in Applied, when it's moved to Recruiter Screen with the keyb
 
   await expectMovedToRecruiterScreen(page, 'Senior QA Engineer', movedAfter)
 })
+
+test("Given a Role in Interested, when it's moved to Applied on the Pipeline board, then today's Applications count it at once", async ({
+  page,
+}) => {
+  await page.goto('/')
+  await page.getByLabel('Role title').fill('Senior QA Engineer')
+  await page.getByRole('button', { name: 'Add Role' }).click()
+  await page.getByRole('link', { name: 'Pipeline board' }).click()
+  await expect(page.getByText('0 of 2 today, a fresh start')).toBeVisible()
+
+  const announcement = page.getByRole('status').filter({ hasText: /\S/ })
+  await page.getByRole('button', { name: 'Move Senior QA Engineer' }).focus()
+  await page.keyboard.press('Space')
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve)))
+  await page.keyboard.press('ArrowRight')
+  await expect(announcement).toHaveText('Senior QA Engineer is over Parked.')
+  await page.keyboard.press('ArrowRight')
+  await expect(announcement).toHaveText('Senior QA Engineer is over Applied.')
+  await page.keyboard.press('Space')
+
+  await expect(page.getByText('1 of 2 today, good going')).toBeVisible()
+})

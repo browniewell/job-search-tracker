@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { App } from '../App'
@@ -94,7 +94,9 @@ describe('Saved searches page', () => {
     await user.clear(within(form).getByLabelText('Site'))
     await user.click(within(form).getByRole('button', { name: 'Save' }))
 
-    const item = await within(list).findByRole('listitem')
+    // The item is listed while its form is open, so wait for the edit itself.
+    await within(list).findByRole('heading', { name: 'Senior QA' })
+    const item = within(list).getByRole('listitem')
     expect(
       within(item).getByRole('heading', { name: 'Senior QA' }),
     ).toBeVisible()
@@ -122,10 +124,13 @@ describe('Saved searches page', () => {
     })
     await user.click(within(confirm).getByRole('button', { name: 'Delete' }))
 
-    await within(list).findByRole('heading', { name: 'SDET' })
-    expect(
-      within(list).queryByRole('heading', { name: 'QA lead' }),
-    ).not.toBeInTheDocument()
+    // SDET is listed throughout, so wait for QA lead to go.
+    await waitFor(() =>
+      expect(
+        within(list).queryByRole('heading', { name: 'QA lead' }),
+      ).not.toBeInTheDocument(),
+    )
+    expect(within(list).getByRole('heading', { name: 'SDET' })).toBeVisible()
     expect(within(list).getAllByRole('listitem')).toHaveLength(1)
   })
 

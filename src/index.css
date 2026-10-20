@@ -414,6 +414,12 @@ button.danger {
   border-radius: 0.375rem;
 }
 
+/* Today's Applications against the Daily target: gentle, never a warning. */
+.daily-pace {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
 /* Roles table */
 
 .table-filters {

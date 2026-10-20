@@ -232,3 +232,55 @@ describe('Configuring Statuses', () => {
     ).toEqual(['Interested', 'Interested → Offer', 'Offer → Accepted'])
   })
 })
+
+describe('Daily target', () => {
+  it('Given the Daily target is 2, when I set it to 3 in Settings, then Roles measures today against 3', async () => {
+    const data = await openTestDataLayer()
+    const user = await openSettings(data)
+    const target = screen.getByRole('spinbutton', { name: 'Daily target' })
+    expect(target).toHaveValue(2)
+
+    await user.clear(target)
+    await user.type(target, '3')
+    await user.click(screen.getByRole('button', { name: 'Save Daily target' }))
+    await user.click(screen.getByRole('link', { name: 'Roles' }))
+
+    expect(await screen.findByText('0 of 3 today, a fresh start')).toBeVisible()
+    expect(await data.getDailyTarget()).toBe(3)
+  })
+
+  it('Given the Daily target is 2, when I set it to 0 in Settings, then I see why it is refused and it stays 2', async () => {
+    const data = await openTestDataLayer()
+    const user = await openSettings(data)
+    const target = screen.getByRole('spinbutton', { name: 'Daily target' })
+
+    await user.clear(target)
+    await user.type(target, '0')
+    await user.click(screen.getByRole('button', { name: 'Save Daily target' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'A Daily target is a whole number, 1 or more',
+    )
+    expect(await data.getDailyTarget()).toBe(2)
+  })
+
+  it('Given setting the Daily target to 0 was refused, when I set it to 3, then the refusal goes and it is 3', async () => {
+    const data = await openTestDataLayer()
+    const user = await openSettings(data)
+    const target = screen.getByRole('spinbutton', { name: 'Daily target' })
+    const save = screen.getByRole('button', { name: 'Save Daily target' })
+    await user.clear(target)
+    await user.type(target, '0')
+    await user.click(save)
+    await screen.findByRole('alert')
+
+    await user.clear(target)
+    await user.type(target, '3')
+    await user.click(save)
+
+    await waitFor(() =>
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
+    )
+    expect(await data.getDailyTarget()).toBe(3)
+  })
+})

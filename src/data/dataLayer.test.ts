@@ -1410,6 +1410,32 @@ describe('Schema v10', () => {
   })
 })
 
+describe('Schema v11', () => {
+  it('Given a Role saved before Settings existed (schema v10), when the database is opened, then the Role reads back and the Daily target is 2', async () => {
+    const name = uniqueDatabaseName()
+    const v10 = new Dexie(name)
+    v10.version(10).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt, companyId, statusId',
+      statusHistory: 'id, roleId',
+      companies: 'id',
+      contacts: 'id, companyId',
+      roleContacts: 'id, roleId, contactId',
+      interviews: 'id, roleId, *interviewerIds',
+      savedSearches: 'id',
+    })
+    const scratch = await openTestDataLayer()
+    const role = await scratch.createRole({ title: 'Senior QA Engineer' })
+    await v10.table('roles').add(role)
+    v10.close()
+
+    const data = await openTestDataLayer({ name })
+
+    expect(await data.getRole(role.id)).toEqual(role)
+    expect(await data.getDailyTarget()).toBe(2)
+  })
+})
+
 describe('Deleting with Contacts', () => {
   async function priyaOnTwoRoles() {
     const data = await openTestDataLayer()
@@ -1965,5 +1991,163 @@ describe('Saved searches', () => {
     await expect(
       data.updateSavedSearch('missing', { name: 'QA lead' }),
     ).rejects.toThrow('No Saved search with id missing')
+  })
+})
+
+describe('Daily target', () => {
+  it('Given a new database, then the Daily target is 2', async () => {
+    const data = await openTestDataLayer()
+
+    expect(await data.getDailyTarget()).toBe(2)
+  })
+
+  it('Given the Daily target is 2, when it is set to 3, then it is 3 after the database is reopened', async () => {
+    const name = uniqueDatabaseName()
+    const first = await openTestDataLayer({ name })
+
+    await first.setDailyTarget(3)
+    first.close()
+
+    expect(await (await openTestDataLayer({ name })).getDailyTarget()).toBe(3)
+  })
+  it.each([0, -1, 1.5, Number.NaN])(
+    'Given the Daily target is 2, when it is set to %s, then it is rejected and stays 2',
+    async (target) => {
+      const data = await openTestDataLayer()
+
+      await expect(data.setDailyTarget(target)).rejects.toThrow(
+        'A Daily target is a whole number, 1 or more',
+      )
+
+      expect(await data.getDailyTarget()).toBe(2)
+    },
+  )
+})
+
+describe("Today's Applications", () => {
+  // Tests run in Chicago: 14:30 UTC on Oct 16 is 9:30 that morning.
+  const morningOfOct16 = new Date('2026-10-16T14:30:00.000Z')
+
+  async function openWithClock(name = uniqueDatabaseName()) {
+    const clock = { now: morningOfOct16 }
+    const data = await openTestDataLayer({ name, clock: () => clock.now })
+    const statuses = await data.listStatuses()
+    const idOf = (name: string) => statuses.find((s) => s.name === name)!.id
+    return { data, clock, idOf }
+  }
+
+  it('Given a Role in Interested, when it first enters the Applied status today, then today has 1 Application', async () => {
+    const { data, idOf } = await openWithClock()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+
+    await data.changeStatus(role.id, idOf('Applied'))
+
+    expect(await data.countApplicationsToday()).toBe(1)
+  })
+  it('Given a Role that entered the Applied status this morning, when it moves to Recruiter Screen and back to Applied today, then today still has 1 Application', async () => {
+    const { data, idOf } = await openWithClock()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    await data.changeStatus(role.id, idOf('Applied'))
+
+    await data.changeStatus(role.id, idOf('Recruiter Screen'))
+    await data.changeStatus(role.id, idOf('Applied'))
+
+    expect(await data.countApplicationsToday()).toBe(1)
+  })
+
+  it('Given a Role that entered the Applied status yesterday, when it moves to Recruiter Screen and back to Applied today, then today has no Applications', async () => {
+    const { data, clock, idOf } = await openWithClock()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    clock.now = new Date('2026-10-15T14:30:00.000Z')
+    await data.changeStatus(role.id, idOf('Applied'))
+    clock.now = morningOfOct16
+
+    await data.changeStatus(role.id, idOf('Recruiter Screen'))
+    await data.changeStatus(role.id, idOf('Applied'))
+
+    expect(await data.countApplicationsToday()).toBe(0)
+  })
+  it('Given one Role applied a second before local midnight and another at local midnight, then only the one at midnight counts today', async () => {
+    const { data, clock, idOf } = await openWithClock()
+    const before = await data.createRole({ title: 'Senior QA Engineer' })
+    const at = await data.createRole({ title: 'QA Lead' })
+    // Already Oct 16 in UTC, but still Oct 15 in Chicago.
+    clock.now = new Date('2026-10-16T04:59:59.000Z')
+    await data.changeStatus(before.id, idOf('Applied'))
+    clock.now = new Date('2026-10-16T05:00:00.000Z')
+    await data.changeStatus(at.id, idOf('Applied'))
+    clock.now = morningOfOct16
+
+    expect(await data.countApplicationsToday()).toBe(1)
+  })
+  // Nothing makes Imported entries yet, so the test writes one into the
+  // Applied status as an import would, after the Role's first entry.
+  async function importApplication(name: string, roleId: string, at: Date) {
+    const raw = await new Dexie(name).open()
+    const statuses = await raw.table('statuses').toArray()
+    const idOf = (n: string) => statuses.find((s) => s.name === n).id
+    await raw.table('statusHistory').add({
+      id: 'imported-entry',
+      roleId,
+      fromStatusId: idOf('Interested'),
+      fromStatusName: 'Interested',
+      toStatusId: idOf('Applied'),
+      toStatusName: 'Applied',
+      at: at.toISOString(),
+      imported: true,
+      sequence: 1,
+    })
+    raw.close()
+  }
+
+  it('Given a Role whose entry into the Applied status today is Imported, then today has no Applications', async () => {
+    const name = uniqueDatabaseName()
+    const { data } = await openWithClock(name)
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+
+    await importApplication(name, role.id, morningOfOct16)
+
+    expect(await data.countApplicationsToday()).toBe(0)
+  })
+
+  it('Given a Role Imported into the Applied status yesterday, when it enters the Applied status again today, then today has no Applications', async () => {
+    const name = uniqueDatabaseName()
+    const { data, clock, idOf } = await openWithClock(name)
+    const yesterday = new Date('2026-10-15T14:30:00.000Z')
+    clock.now = yesterday
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    await importApplication(name, role.id, yesterday)
+    clock.now = morningOfOct16
+
+    await data.changeStatus(role.id, idOf('Applied'))
+
+    expect(await data.countApplicationsToday()).toBe(0)
+  })
+
+  it('Given the Applied status is renamed Submitted, when a Role first enters Submitted today, then today has 1 Application', async () => {
+    const { data, idOf } = await openWithClock()
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    await data.updateStatus(idOf('Applied'), { name: 'Submitted' })
+
+    await data.changeStatus(role.id, idOf('Applied'))
+
+    expect(await data.countApplicationsToday()).toBe(1)
+  })
+
+  it('Given Recruiter Screen is made the Applied status, when two Roles enter Recruiter Screen and another enters Applied today, then only the two in Recruiter Screen count', async () => {
+    const { data, idOf } = await openWithClock()
+    const screened = [
+      await data.createRole({ title: 'Senior QA Engineer' }),
+      await data.createRole({ title: 'QA Lead' }),
+    ]
+    const applied = await data.createRole({ title: 'Test Architect' })
+    await data.setAppliedStatus(idOf('Recruiter Screen'))
+
+    for (const role of screened) {
+      await data.changeStatus(role.id, idOf('Recruiter Screen'))
+    }
+    await data.changeStatus(applied.id, idOf('Applied'))
+
+    expect(await data.countApplicationsToday()).toBe(2)
   })
 })
