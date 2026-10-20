@@ -1,6 +1,6 @@
 # Coding standards
 
-Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002, imports from another area, copies of `errorMessage`, and JSX accessibility), Prettier, tsc (including `exactOptionalPropertyTypes`, so a partial edit can't overwrite a field with `undefined`), the schema tripwire in `src/data/schema.test.ts`, and the `e2e/layout-*.spec.ts` files, one per area, which check every page for overflow and run axe on it in both themes. A new page's checks go in its area's file, using the helpers in `e2e/layout.ts`. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
+Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002, imports from another area, copies of `errorMessage`, specs that add Roles, Companies or Contacts outside `e2e/seed.ts`, and JSX accessibility), Prettier, tsc (including `exactOptionalPropertyTypes`, so a partial edit can't overwrite a field with `undefined`), the schema tripwire in `src/data/schema.test.ts`, and the `e2e/layout-*.spec.ts` files, one per area, which check every page for overflow and run axe on it in both themes. A new page's checks go in its area's file, using the helpers in `e2e/layout.ts`. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
 
 ## Code
 
@@ -30,6 +30,6 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 ## UI
 
 - **Glossary terms in UI copy**, matching `GLOSSARY.md` exactly ("Role title", "Company not disclosed"). A new domain concept gets its glossary entry in the same PR; plain-English fields such as "industry" don't need one.
-- **Copy used in more than one place is one constant.** Field labels are the exception: a field's edit form and its read-only view each write the label, and `GLOSSARY.md` keeps them in step.
+- **Copy used in more than one place is one constant.** Field labels are the exception: a field's edit form, its read-only view and its CSV export header each write the label, and `GLOSSARY.md` keeps them in step. A CSV header uses its edit form's wording ("Posted salary minimum").
 - **Shared building blocks live in `src/components`** (field lists, form rows, delete confirmation). Pages live under their area, such as `src/roles` or `src/companies`. A second page needing a piece is the cue to move it to `src/components`, or to `src/format.ts` for display formatting, in the same PR.
 - **Links from stored data render through `ExternalLink`**, which shows anything that isn't http(s) as text.

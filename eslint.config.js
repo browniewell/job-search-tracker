@@ -71,4 +71,21 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // Specs add Roles, Companies and Contacts through e2e/seed.ts ("Extend,
+    // don't copy"); the add-Role steps had been copied into five places.
+    files: ['e2e/**/*.ts'],
+    ignores: ['e2e/seed.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.property.name='getByRole'] > ObjectExpression > Property[key.name='name'][value.value=/^Add (Role|Company|Contact)$/]",
+          message:
+            'Add Roles, Companies and Contacts with the helpers in e2e/seed.ts.',
+        },
+      ],
+    },
+  },
 ])
