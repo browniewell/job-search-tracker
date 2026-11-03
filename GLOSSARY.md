@@ -147,7 +147,7 @@ _Avoid_: Next action (that's what you plan to do for a Role)
 
 ### Keeping your data
 
-**Backup**:
+**backup**:
 A JSON file of everything you've saved, including Minimum salary, with its schema version. Restoring one replaces everything in this browser.
 _Avoid_: Snapshot, dump, CSV export
 
