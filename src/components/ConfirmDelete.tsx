@@ -9,11 +9,14 @@ const cannotBeUndone = 'This can’t be undone.'
  */
 export function ConfirmDelete({
   heading,
+  confirmLabel = 'Delete',
   children,
   onConfirm,
   onCancel,
 }: {
   heading: string
+  /** The confirming button, for a choice that replaces rather than deletes. */
+  confirmLabel?: string
   children: ReactNode
   onConfirm: () => void
   onCancel: () => void
@@ -44,7 +47,7 @@ export function ConfirmDelete({
       </p>
       <div className="form-actions">
         <button type="button" className="danger" onClick={onConfirm}>
-          Delete
+          {confirmLabel}
         </button>
         <button
           type="button"

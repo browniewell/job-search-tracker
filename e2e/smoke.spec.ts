@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
-import { addRole, addRoleToList } from './seed.ts'
+import { addRole, addRoleToList, exportBackup } from './seed.ts'
 
 test('Given the production build, when I add a Role, then it is listed and survives a reload', async ({
   page,
@@ -75,4 +75,43 @@ test('Given a Role, when I export Roles to CSV, then a CSV file downloads with i
   const text = await readFile(await file.path(), 'utf8')
   expect(text).toMatch(/^\uFEFFRole title,Status,Company,/)
   expect(text).toContain('\r\n"QA Lead, Platform",Interested,')
+})
+
+test('Given a backup, when I change data and restore from the downloaded file, then the data matches the backup', async ({
+  page,
+}) => {
+  await addRole(page, 'Senior QA Engineer')
+  await page.getByRole('button', { name: 'Edit' }).click()
+  await page.getByLabel('Minimum salary').fill('120000')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('region', { name: 'Role fields' })).toContainText(
+    '$120,000',
+  )
+  const backupPath = await exportBackup(page)
+  await expect(page.getByText(/^Last backup: today/)).toBeVisible()
+  const backup = JSON.parse(await readFile(backupPath, 'utf8'))
+  expect(backup.roles[0].minimumSalary).toBe(120000)
+  await addRoleToList(page, 'Added after the backup')
+
+  await page.goto('/#/settings')
+  await page.getByLabel('Restore from a backup').setInputFiles(backupPath)
+  const dialog = page.getByRole('alertdialog', {
+    name: 'Replace 2 Roles with 1 from backup?',
+  })
+  await dialog.getByRole('button', { name: 'Replace' }).click()
+  await expect(page.getByRole('status')).toHaveText(
+    'Restored from your backup.',
+  )
+
+  // The next backup records its own time; everything else matches.
+  const restored = JSON.parse(await readFile(await exportBackup(page), 'utf8'))
+  restored.settings[0].lastBackupAt = backup.settings[0].lastBackupAt
+  expect(restored).toEqual(backup)
+  await page.goto('/')
+  await expect(
+    page.getByRole('link', { name: 'Senior QA Engineer' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: 'Added after the backup' }),
+  ).toHaveCount(0)
 })

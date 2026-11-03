@@ -245,9 +245,27 @@ export interface Settings {
   id: typeof settingsId
   /** How many Applications you aim to make per day. */
   dailyTarget: number
+  /** When a backup was last exported, from the clock. */
+  lastBackupAt: string | null
 }
 
-const defaultSettings: Settings = { id: settingsId, dailyTarget: 2 }
+const defaultSettings: Settings = {
+  id: settingsId,
+  dailyTarget: 2,
+  lastBackupAt: null,
+}
+
+/** What restoring a backup would replace. */
+export interface BackupPreview {
+  currentRoles: number
+  backupRoles: number
+}
+
+/** A backup ready to save as a file. */
+export interface ExportedBackup {
+  fileName: string
+  json: string
+}
 
 const defaultStatuses: Array<
   Pick<Status, 'name' | 'closed' | 'isApplied' | 'isParked'>
@@ -275,6 +293,11 @@ function localCalendarDate(moment: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${moment.getFullYear()}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())}`
 }
+
+/** A moment's position in whole local calendar days, to count days between moments. */
+const localDayNumber = (moment: Date) =>
+  Date.UTC(moment.getFullYear(), moment.getMonth(), moment.getDate()) /
+  86_400_000
 
 /** The text trimmed, or an error with the given message when it is blank. */
 function requireText(text: string, blankMessage: string): string {
@@ -336,11 +359,16 @@ export function flagsShownOnRole(
   return [...own, ...dealbreakers.map((flag) => ({ flag, from: company.name }))]
 }
 
+const isFitRating = (fitRating: unknown) =>
+  Number.isInteger(fitRating) &&
+  (fitRating as number) >= 1 &&
+  (fitRating as number) <= 5
+
+const isDailyTarget = (target: unknown) =>
+  Number.isInteger(target) && (target as number) >= 1
+
 function checkFitRating(fitRating: FitRating | null): void {
-  if (
-    fitRating !== null &&
-    !(Number.isInteger(fitRating) && fitRating >= 1 && fitRating <= 5)
-  ) {
+  if (fitRating !== null && !isFitRating(fitRating)) {
     throw new Error('Fit rating must be a whole number from 1 to 5')
   }
 }
@@ -386,6 +414,15 @@ export function statusHasRolesMessage(
 /** Why the Applied status can't be deleted. */
 export function appliedStatusDeleteMessage(statusName: string): string {
   return `${statusName} is the Applied status. Choose another Applied status first.`
+}
+
+/** The question to ask before restoring a backup. */
+export function replaceRolesMessage({
+  currentRoles,
+  backupRoles,
+}: BackupPreview): string {
+  const [roles] = counted(currentRoles, 'Role')
+  return `Replace ${roles} with ${backupRoles} from backup?`
 }
 
 // Roles added together share a timestamp, so title breaks the tie.
@@ -471,16 +508,226 @@ function csvCell(value: CsvValue): string {
 
 const csvLine = (values: CsvValue[]) => values.map(csvCell).join(',') + '\r\n'
 
+interface StoredRecords {
+  statuses: Status
+  roles: Role
+  statusHistory: StatusHistoryEntry
+  companies: Company
+  contacts: Contact
+  roleContacts: RoleContact
+  interviews: Interview
+  savedSearches: SavedSearch
+  settings: Settings
+}
+
 type Database = Dexie & {
-  statuses: EntityTable<Status, 'id'>
-  roles: EntityTable<Role, 'id'>
-  statusHistory: EntityTable<StatusHistoryEntry, 'id'>
-  companies: EntityTable<Company, 'id'>
-  contacts: EntityTable<Contact, 'id'>
-  roleContacts: EntityTable<RoleContact, 'id'>
-  interviews: EntityTable<Interview, 'id'>
-  savedSearches: EntityTable<SavedSearch, 'id'>
-  settings: EntityTable<Settings, 'id'>
+  [Table in keyof StoredRecords]: EntityTable<StoredRecords[Table], 'id'>
+}
+
+// Checking a backup before it replaces everything. Typed against every table
+// and field, so a new one needs its check here.
+type Check = (value: unknown) => boolean
+const isText: Check = (value) => typeof value === 'string'
+const isNumber: Check = (value) => typeof value === 'number'
+const isBoolean: Check = (value) => typeof value === 'boolean'
+const isTextList: Check = (value) => Array.isArray(value) && value.every(isText)
+const orNull =
+  (check: Check): Check =>
+  (value) =>
+    value === null || check(value)
+const isOneOf =
+  (...allowed: readonly unknown[]): Check =>
+  (value) =>
+    allowed.includes(value)
+const isTextOrNull = orNull(isText)
+const isNumberOrNull = orNull(isNumber)
+
+const backupFields: {
+  [Table in keyof StoredRecords]: Record<keyof StoredRecords[Table], Check>
+} = {
+  statuses: {
+    id: isText,
+    name: isText,
+    closed: isBoolean,
+    order: isNumber,
+    isApplied: isBoolean,
+    isParked: isBoolean,
+  },
+  roles: {
+    id: isText,
+    title: isText,
+    statusId: isText,
+    createdAt: isText,
+    companyId: isTextOrNull,
+    location: isTextOrNull,
+    workArrangement: isOneOf(null, 'on-site', 'hybrid', 'remote'),
+    salaryMin: isNumberOrNull,
+    salaryMax: isNumberOrNull,
+    salaryPeriod: isOneOf(null, 'annual', 'hourly'),
+    salaryNote: isTextOrNull,
+    expectedSalary: isNumberOrNull,
+    minimumSalary: isNumberOrNull,
+    roleSummary: isTextOrNull,
+    postingLink: isTextOrNull,
+    hiringSiteLink: isTextOrNull,
+    postingDate: isTextOrNull,
+    postingCopy: isTextOrNull,
+    postingCopySavedAt: isTextOrNull,
+    fitNotes: isTextOrNull,
+    fitRating: orNull(isFitRating),
+    referralSubmitted: isBoolean,
+    flags: isTextList,
+    nextAction: isTextOrNull,
+    nextActionDate: isTextOrNull,
+    parkedReason: isTextOrNull,
+    notes: isTextOrNull,
+  },
+  statusHistory: {
+    id: isText,
+    roleId: isText,
+    fromStatusId: isTextOrNull,
+    fromStatusName: isTextOrNull,
+    toStatusId: isText,
+    toStatusName: isText,
+    at: isText,
+    imported: isBoolean,
+    sequence: isNumber,
+  },
+  companies: {
+    id: isText,
+    name: isText,
+    industry: isTextOrNull,
+    summary: isTextOrNull,
+    website: isTextOrNull,
+    size: isTextOrNull,
+    flags: isTextList,
+    notes: isTextOrNull,
+  },
+  contacts: {
+    id: isText,
+    name: isText,
+    title: isTextOrNull,
+    companyId: isTextOrNull,
+    howYouKnow: isTextOrNull,
+    email: isTextOrNull,
+    linkedIn: isTextOrNull,
+    notes: isTextOrNull,
+  },
+  roleContacts: {
+    id: isText,
+    roleId: isText,
+    contactId: isText,
+    type: isOneOf(...roleContactTypes),
+  },
+  interviews: {
+    id: isText,
+    roleId: isText,
+    at: isText,
+    type: isOneOf(...interviewTypes),
+    interviewerIds: isTextList,
+    notes: isTextOrNull,
+    followUpSent: isBoolean,
+  },
+  savedSearches: {
+    id: isText,
+    name: isText,
+    link: isTextOrNull,
+    site: isTextOrNull,
+    lastCheckedAt: isTextOrNull,
+  },
+  settings: {
+    id: isOneOf(settingsId),
+    dailyTarget: isDailyTarget,
+    lastBackupAt: isTextOrNull,
+  },
+}
+
+const backupTables = Object.keys(backupFields) as Array<keyof StoredRecords>
+
+// Status history keeps its Status ids and names after a Status is deleted, so
+// they are not references here.
+const backupReferences: Array<
+  [table: keyof StoredRecords, field: string, target: keyof StoredRecords]
+> = [
+  ['roles', 'statusId', 'statuses'],
+  ['roles', 'companyId', 'companies'],
+  ['contacts', 'companyId', 'companies'],
+  ['statusHistory', 'roleId', 'roles'],
+  ['roleContacts', 'roleId', 'roles'],
+  ['roleContacts', 'contactId', 'contacts'],
+  ['interviews', 'roleId', 'roles'],
+  ['interviews', 'interviewerIds', 'contacts'],
+]
+
+type StoredRecord = Record<string, unknown>
+type BackupRecords = Record<keyof StoredRecords, StoredRecord[]>
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const countWhere = (records: StoredRecord[], field: string) =>
+  records.filter((record) => record[field]).length
+
+/** Whether every table is a list of well-formed records with their own ids. */
+function hasWellFormedTables(
+  file: Record<string, unknown>,
+): file is BackupRecords {
+  return backupTables.every((table) => {
+    const records = file[table]
+    const checks: Record<string, Check> = backupFields[table]
+    return (
+      Array.isArray(records) &&
+      new Set(records.map((record) => record?.id)).size === records.length &&
+      records.every(
+        (record) =>
+          isObject(record) &&
+          Object.keys(record).length === Object.keys(checks).length &&
+          Object.entries(checks).every(
+            ([field, check]) => field in record && check(record[field]),
+          ),
+      )
+    )
+  })
+}
+
+/** Whether every reference in the backup is to a record it holds. */
+function hasWholeReferences(records: BackupRecords): boolean {
+  return backupReferences.every(([table, field, target]) => {
+    const ids = new Set(records[target].map((record) => record.id))
+    return records[table]
+      .flatMap((record) => record[field])
+      .every((id) => id === null || ids.has(id))
+  })
+}
+
+const notABackupMessage = "This file isn't a Job Search Tracker backup."
+
+/** The records of a backup, or an error saying why it can't be restored. */
+function parseBackup(json: string, schemaVersion: number): BackupRecords {
+  let file: unknown
+  try {
+    file = JSON.parse(json)
+  } catch {
+    throw new Error(notABackupMessage)
+  }
+  if (!isObject(file) || !('schemaVersion' in file)) {
+    throw new Error(notABackupMessage)
+  }
+  if (file.schemaVersion !== schemaVersion) {
+    throw new Error(
+      "This backup is from a different version of the app, so it can't be restored.",
+    )
+  }
+  if (
+    !hasWellFormedTables(file) ||
+    !hasWholeReferences(file) ||
+    file.settings.length !== 1 ||
+    countWhere(file.statuses, 'isApplied') !== 1 ||
+    countWhere(file.statuses, 'isParked') > 1
+  ) {
+    throw new Error("This backup is damaged, so it can't be restored.")
+  }
+  return file
 }
 
 export interface DataLayer {
@@ -597,6 +844,17 @@ export interface DataLayer {
    * included.
    */
   exportRolesCsv(): Promise<string>
+  /**
+   * Everything saved, including Minimum salary, as one JSON file with its
+   * schema version. Records this as the last backup, which the file holds too.
+   */
+  exportBackup(): Promise<ExportedBackup>
+  /** What restoring this backup would replace. Changes nothing. */
+  previewBackup(json: string): Promise<BackupPreview>
+  /** Replaces everything saved with the backup, in one transaction. */
+  restoreBackup(json: string): Promise<void>
+  /** Local calendar days since the last backup; null when there hasn't been one. */
+  daysSinceLastBackup(): Promise<number | null>
   /** Whether the Role's Next action date is today or past, by the local calendar day. */
   isNextActionDue(role: Role): boolean
   close(): void
@@ -694,6 +952,8 @@ export async function openDataLayer(options: {
   db.version(11)
     .stores({ settings: 'id' })
     .upgrade((tx) => tx.table('settings').add(defaultSettings))
+  // v12 adds the last backup time to Settings.
+  db.version(12).upgrade(fillMissingFields('settings', defaultSettings))
   db.on('populate', (tx) => {
     tx.table('settings').add(defaultSettings)
     tx.table('statuses').bulkAdd(
@@ -1222,6 +1482,41 @@ export async function openDataLayer(options: {
         ])
         return header + rows.join('')
       }),
+    exportBackup: () =>
+      db.transaction('rw', db.tables, async () => {
+        const now = options.clock()
+        await db.settings.update(settingsId, {
+          lastBackupAt: now.toISOString(),
+        })
+        const backup: Record<string, unknown> = { schemaVersion: db.verno }
+        for (const table of backupTables) {
+          backup[table] = await db.table(table).toArray()
+        }
+        return {
+          fileName: `job-search-tracker-backup-${localCalendarDate(now)}.json`,
+          json: JSON.stringify(backup, null, 2),
+        }
+      }),
+    previewBackup: async (json) => ({
+      currentRoles: await db.roles.count(),
+      backupRoles: parseBackup(json, db.verno).roles.length,
+    }),
+    restoreBackup: async (json) => {
+      const backup = parseBackup(json, db.verno)
+      await db.transaction('rw', db.tables, async () => {
+        for (const table of backupTables) {
+          await db.table(table).clear()
+          await db.table(table).bulkAdd(backup[table])
+        }
+      })
+    },
+    daysSinceLastBackup: async () => {
+      const { lastBackupAt } = (await db.settings.get(settingsId))!
+      if (lastBackupAt === null) return null
+      const days =
+        localDayNumber(options.clock()) - localDayNumber(new Date(lastBackupAt))
+      return Math.max(days, 0)
+    },
     listFlagSuggestions: () =>
       db.transaction('r', db.roles, db.companies, async () => {
         const used = [
@@ -1243,7 +1538,7 @@ export async function openDataLayer(options: {
     getDailyTarget: async () =>
       (await db.settings.get(settingsId))!.dailyTarget,
     setDailyTarget: async (target) => {
-      if (!Number.isInteger(target) || target < 1) {
+      if (!isDailyTarget(target)) {
         throw new Error('A Daily target is a whole number, 1 or more')
       }
       await db.settings.update(settingsId, { dailyTarget: target })

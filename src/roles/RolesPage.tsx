@@ -1,24 +1,11 @@
 import { useEffect, useState } from 'react'
 import { AddByNameForm } from '../components/AddByNameForm'
+import { BackupReminder } from '../components/BackupReminder'
+import { download } from '../components/download'
 import type { Company, Role, Status } from '../data/dataLayer'
 import { useDataLayer } from '../dataContext'
 import { DailyPace } from './DailyPace'
 import { RolesTable } from './RolesTable'
-
-/**
- * Saves text as a file through the browser's download. The byte order mark
- * tells spreadsheets the file is UTF-8, so text such as "51–200" survives.
- */
-function download(fileName: string, text: string, type: string) {
-  const url = URL.createObjectURL(new Blob(['\uFEFF', text], { type }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = fileName
-  link.click()
-  // Revoked once the click is handled: some browsers cancel the download
-  // when the URL goes away first.
-  setTimeout(() => URL.revokeObjectURL(url))
-}
 
 export function RolesPage() {
   const data = useDataLayer()
@@ -49,7 +36,10 @@ export function RolesPage() {
   }
 
   async function exportCsv() {
-    download('roles.csv', await data.exportRolesCsv(), 'text/csv')
+    // The byte order mark tells spreadsheets the file is UTF-8, so text such
+    // as "51–200" survives.
+    const csv = await data.exportRolesCsv()
+    download('roles.csv', `\uFEFF${csv}`, 'text/csv')
   }
 
   return (
@@ -71,6 +61,7 @@ export function RolesPage() {
               Export Roles to CSV
             </button>
           </p>
+          <BackupReminder />
         </>
       )}
     </section>

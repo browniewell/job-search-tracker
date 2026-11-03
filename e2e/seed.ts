@@ -40,6 +40,14 @@ export async function addRole(page: Page, title: string) {
   await page.getByRole('link', { name: title }).click()
 }
 
+/** From Settings, exports a backup. Resolves to the downloaded file's path. */
+export async function exportBackup(page: Page): Promise<string> {
+  await page.goto('/#/settings')
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export backup' }).click()
+  return (await download).path()
+}
+
 /** On a Role page, links a Contact to the Role as its hiring manager. */
 export async function linkHiringManager(page: Page, contact: string) {
   await page
