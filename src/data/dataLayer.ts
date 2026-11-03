@@ -149,8 +149,10 @@ export interface SavedSearch extends SavedSearchFields {
   lastCheckedAt: string | null
 }
 
-export type WorkArrangement = 'on-site' | 'hybrid' | 'remote'
-export type SalaryPeriod = 'annual' | 'hourly'
+const workArrangements = ['on-site', 'hybrid', 'remote'] as const
+export type WorkArrangement = (typeof workArrangements)[number]
+const salaryPeriods = ['annual', 'hourly'] as const
+export type SalaryPeriod = (typeof salaryPeriods)[number]
 export type FitRating = 1 | 2 | 3 | 4 | 5
 
 /** The fields of a Role you can edit directly. Empty fields are null. */
@@ -359,6 +361,9 @@ export function flagsShownOnRole(
   return [...own, ...dealbreakers.map((flag) => ({ flag, from: company.name }))]
 }
 
+const isLocalDateTime = (value: unknown) =>
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+
 const isFitRating = (fitRating: unknown) =>
   Number.isInteger(fitRating) &&
   (fitRating as number) >= 1 &&
@@ -530,7 +535,17 @@ type Check = (value: unknown) => boolean
 const isText: Check = (value) => typeof value === 'string'
 const isNumber: Check = (value) => typeof value === 'number'
 const isBoolean: Check = (value) => typeof value === 'boolean'
+const isName: Check = (value) =>
+  isText(value) && (value as string).trim() !== ''
 const isTextList: Check = (value) => Array.isArray(value) && value.every(isText)
+const isDistinctTextList: Check = (value) =>
+  isTextList(value) &&
+  new Set(value as string[]).size === (value as string[]).length
+// What the pages format as dates: anything else would stop them rendering.
+const isCalendarDate: Check = (value) =>
+  isText(value) && /^\d{4}-\d{2}-\d{2}$/.test(value as string)
+const isTimestamp: Check = (value) =>
+  isText(value) && !Number.isNaN(Date.parse(value as string))
 const orNull =
   (check: Check): Check =>
   (value) =>
@@ -541,13 +556,15 @@ const isOneOf =
     allowed.includes(value)
 const isTextOrNull = orNull(isText)
 const isNumberOrNull = orNull(isNumber)
+const isCalendarDateOrNull = orNull(isCalendarDate)
+const isTimestampOrNull = orNull(isTimestamp)
 
 const backupFields: {
   [Table in keyof StoredRecords]: Record<keyof StoredRecords[Table], Check>
 } = {
   statuses: {
     id: isText,
-    name: isText,
+    name: isName,
     closed: isBoolean,
     order: isNumber,
     isApplied: isBoolean,
@@ -555,30 +572,30 @@ const backupFields: {
   },
   roles: {
     id: isText,
-    title: isText,
+    title: isName,
     statusId: isText,
-    createdAt: isText,
+    createdAt: isTimestamp,
     companyId: isTextOrNull,
     location: isTextOrNull,
-    workArrangement: isOneOf(null, 'on-site', 'hybrid', 'remote'),
+    workArrangement: isOneOf(null, ...workArrangements),
     salaryMin: isNumberOrNull,
     salaryMax: isNumberOrNull,
-    salaryPeriod: isOneOf(null, 'annual', 'hourly'),
+    salaryPeriod: isOneOf(null, ...salaryPeriods),
     salaryNote: isTextOrNull,
     expectedSalary: isNumberOrNull,
     minimumSalary: isNumberOrNull,
     roleSummary: isTextOrNull,
     postingLink: isTextOrNull,
     hiringSiteLink: isTextOrNull,
-    postingDate: isTextOrNull,
+    postingDate: isCalendarDateOrNull,
     postingCopy: isTextOrNull,
-    postingCopySavedAt: isTextOrNull,
+    postingCopySavedAt: isTimestampOrNull,
     fitNotes: isTextOrNull,
     fitRating: orNull(isFitRating),
     referralSubmitted: isBoolean,
     flags: isTextList,
     nextAction: isTextOrNull,
-    nextActionDate: isTextOrNull,
+    nextActionDate: isCalendarDateOrNull,
     parkedReason: isTextOrNull,
     notes: isTextOrNull,
   },
@@ -589,13 +606,13 @@ const backupFields: {
     fromStatusName: isTextOrNull,
     toStatusId: isText,
     toStatusName: isText,
-    at: isText,
+    at: isTimestamp,
     imported: isBoolean,
     sequence: isNumber,
   },
   companies: {
     id: isText,
-    name: isText,
+    name: isName,
     industry: isTextOrNull,
     summary: isTextOrNull,
     website: isTextOrNull,
@@ -605,7 +622,7 @@ const backupFields: {
   },
   contacts: {
     id: isText,
-    name: isText,
+    name: isName,
     title: isTextOrNull,
     companyId: isTextOrNull,
     howYouKnow: isTextOrNull,
@@ -622,23 +639,23 @@ const backupFields: {
   interviews: {
     id: isText,
     roleId: isText,
-    at: isText,
+    at: isLocalDateTime,
     type: isOneOf(...interviewTypes),
-    interviewerIds: isTextList,
+    interviewerIds: isDistinctTextList,
     notes: isTextOrNull,
     followUpSent: isBoolean,
   },
   savedSearches: {
     id: isText,
-    name: isText,
+    name: isName,
     link: isTextOrNull,
     site: isTextOrNull,
-    lastCheckedAt: isTextOrNull,
+    lastCheckedAt: isTimestampOrNull,
   },
   settings: {
     id: isOneOf(settingsId),
     dailyTarget: isDailyTarget,
-    lastBackupAt: isTextOrNull,
+    lastBackupAt: isTimestampOrNull,
   },
 }
 
@@ -659,14 +676,27 @@ const backupReferences: Array<
   ['interviews', 'interviewerIds', 'contacts'],
 ]
 
-type StoredRecord = Record<string, unknown>
-type BackupRecords = Record<keyof StoredRecords, StoredRecord[]>
+type RawRecord = Record<string, unknown>
+type BackupRecords = Record<keyof StoredRecords, RawRecord[]>
+
+const nameIgnoringCase = (record: RawRecord) =>
+  (record.name as string).toLocaleLowerCase()
+
+// The rules that say a value is used once, as the data layer's own checks do.
+const backupUniques: Array<
+  [table: keyof StoredRecords, key: (record: RawRecord) => unknown]
+> = [
+  ['statuses', nameIgnoringCase],
+  ['companies', nameIgnoringCase],
+  ['roleContacts', (r) => JSON.stringify([r.roleId, r.contactId, r.type])],
+  ['interviews', (r) => JSON.stringify([r.roleId, r.at, r.type])],
+]
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const countWhere = (records: StoredRecord[], field: string) =>
-  records.filter((record) => record[field]).length
+const countTrue = (records: RawRecord[], field: string) =>
+  records.filter((record) => record[field] === true).length
 
 /** Whether every table is a list of well-formed records with their own ids. */
 function hasWellFormedTables(
@@ -702,6 +732,14 @@ function hasWholeReferences(records: BackupRecords): boolean {
 
 const notABackupMessage = "This file isn't a Job Search Tracker backup."
 
+/** Whether what must be used once is. */
+function hasDistinctValues(records: BackupRecords): boolean {
+  return backupUniques.every(([table, key]) => {
+    const keys = records[table].map(key)
+    return new Set(keys).size === keys.length
+  })
+}
+
 /** The records of a backup, or an error saying why it can't be restored. */
 function parseBackup(json: string, schemaVersion: number): BackupRecords {
   let file: unknown
@@ -721,9 +759,10 @@ function parseBackup(json: string, schemaVersion: number): BackupRecords {
   if (
     !hasWellFormedTables(file) ||
     !hasWholeReferences(file) ||
+    !hasDistinctValues(file) ||
     file.settings.length !== 1 ||
-    countWhere(file.statuses, 'isApplied') !== 1 ||
-    countWhere(file.statuses, 'isParked') > 1
+    countTrue(file.statuses, 'isApplied') !== 1 ||
+    countTrue(file.statuses, 'isParked') > 1
   ) {
     throw new Error("This backup is damaged, so it can't be restored.")
   }
@@ -1027,7 +1066,7 @@ export async function openDataLayer(options: {
   // fully chosen.
   async function checkedInterview(interview: Interview): Promise<Interview> {
     await checkRoleExists(interview.roleId)
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(interview.at)) {
+    if (!isLocalDateTime(interview.at)) {
       throw new Error('An Interview needs a date and time')
     }
     if (!interview.type) throw new Error('An Interview needs a type')

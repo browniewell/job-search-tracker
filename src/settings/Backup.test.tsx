@@ -7,18 +7,28 @@ import { openTestDataLayer } from '../test/dataLayers'
 describe('The backup reminder', () => {
   it.each([
     [
+      'no backup',
       null,
       'No backup yet. Saving one keeps your search safe if browser storage is ever cleared.',
     ],
-    ['2026-10-16T14:30:00.000Z', "Last backup: today. You're all set."],
-    ['2026-10-15T14:30:00.000Z', 'Last backup: 1 day ago. Nicely kept.'],
     [
+      'a backup today',
+      '2026-10-16T14:30:00.000Z',
+      "Last backup: today. You're all set.",
+    ],
+    [
+      'a backup yesterday',
+      '2026-10-15T14:30:00.000Z',
+      'Last backup: 1 day ago. Nicely kept.',
+    ],
+    [
+      'a backup 12 days ago',
       '2026-10-04T14:30:00.000Z',
       'Last backup: 12 days ago. A fresh one only takes a moment.',
     ],
   ])(
-    'Given a last backup at %s and a Role, when I open Roles, then I see "%s" with an export button',
-    async (lastBackupAt, message) => {
+    'Given %s and a Role, when I open Roles, then I see the reminder for it with an export button',
+    async (_, lastBackupAt, message) => {
       let now = lastBackupAt ? new Date(lastBackupAt) : new Date()
       const data = await openTestDataLayer({ clock: () => now })
       await data.createRole({ title: 'Senior QA Engineer' })
@@ -49,13 +59,16 @@ describe('The backup reminder', () => {
 
 describe('Restoring a backup', () => {
   async function openSettingsWithBackupFile() {
-    const data = await openTestDataLayer()
+    let now = new Date('2026-10-15T14:30:00.000Z')
+    const data = await openTestDataLayer({ clock: () => now })
     await data.createRole({ title: 'In the backup' })
     await data.setDailyTarget(5)
     const { json } = await data.exportBackup()
+    now = new Date('2026-10-16T14:30:00.000Z')
     await data.createRole({ title: 'Added after the backup' })
     await data.setDailyTarget(9)
     await data.createStatus({ name: 'Added Status' })
+    await data.exportBackup()
     const user = userEvent.setup()
     render(<App data={data} />)
     await user.click(await screen.findByRole('link', { name: 'Settings' }))
@@ -89,7 +102,7 @@ describe('Restoring a backup', () => {
     ).toHaveDisplayValue('5')
     expect(screen.queryByText('Added Status')).not.toBeInTheDocument()
     expect(
-      screen.getByText("Last backup: today. You're all set."),
+      await screen.findByText('Last backup: 1 day ago. Nicely kept.'),
     ).toBeVisible()
   })
 
@@ -127,15 +140,16 @@ describe('Persistent storage', () => {
 
   function stubStorage(persisted: boolean) {
     const persist = vi.fn(async () => true)
+    const asked = vi.fn(async () => persisted)
     Object.defineProperty(navigator, 'storage', {
       configurable: true,
-      value: { persisted: async () => persisted, persist },
+      value: { persisted: asked, persist },
     })
-    return persist
+    return { asked, persist }
   }
 
   it('Given storage that is not yet persistent, when the app opens, then it asks the browser to keep it', async () => {
-    const persist = stubStorage(false)
+    const { persist } = stubStorage(false)
 
     render(<App data={await openTestDataLayer()} />)
 
@@ -143,10 +157,13 @@ describe('Persistent storage', () => {
   })
 
   it('Given storage that is already persistent, when the app opens, then it does not ask again', async () => {
-    const persist = stubStorage(true)
+    const { asked, persist } = stubStorage(true)
 
     render(<App data={await openTestDataLayer()} />)
-    await screen.findByRole('heading', { name: 'Roles' })
+    await vi.waitFor(() => expect(asked).toHaveBeenCalled())
+    await asked.mock.results[0].value
+    // A turn of the event loop, for a request that followed the answer.
+    await new Promise((resolve) => setTimeout(resolve))
 
     expect(persist).not.toHaveBeenCalled()
   })

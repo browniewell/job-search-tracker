@@ -2291,6 +2291,8 @@ describe('JSON backup', () => {
       companyId: company.id,
       minimumSalary: 987654,
       postingCopy: 'We are hiring',
+      postingDate: '2026-10-01',
+      nextActionDate: '2026-10-20',
     })
     const applied = (await data.listStatuses()).find((s) => s.isApplied)!
     await data.changeStatus(role.id, applied.id)
@@ -2308,11 +2310,12 @@ describe('JSON backup', () => {
       notes: 'Went well',
       followUpSent: true,
     })
-    await data.createSavedSearch({
+    const search = await data.createSavedSearch({
       name: 'QA lead',
       link: 'https://www.linkedin.com/jobs/search?keywords=QA',
       site: 'LinkedIn',
     })
+    await data.markSavedSearchChecked(search.id)
     await data.setDailyTarget(5)
     return data
   }
@@ -2405,6 +2408,24 @@ describe('JSON backup', () => {
     )
     expect(await data.listRoles()).toHaveLength(2)
   })
+  it('Given two Interviews of one type at different times, when the backup is restored, then both are kept', async () => {
+    const data = await openWithEveryEntity()
+    const [role] = await data.listRoles()
+    await data.createInterview({
+      roleId: role.id,
+      at: '2026-10-27T14:00',
+      type: 'recruiter screen',
+      interviewerIds: [],
+      notes: null,
+      followUpSent: false,
+    })
+    const { json } = await data.exportBackup()
+
+    await data.restoreBackup(json)
+
+    expect(await data.listInterviews(role.id)).toHaveLength(2)
+  })
+
   const notABackup = "This file isn't a Job Search Tracker backup."
   const otherVersion =
     "This backup is from a different version of the app, so it can't be restored."
@@ -2503,6 +2524,80 @@ describe('JSON backup', () => {
       'two Parked statuses',
       damaged,
       (b) => (b.statuses.find((s: BackupFile) => !s.isParked).isParked = true),
+    ],
+    ['a blank Role title', damaged, (b) => (b.roles[0].title = '  ')],
+    ['a blank Company name', damaged, (b) => (b.companies[0].name = '')],
+    ['a blank Contact name', damaged, (b) => (b.contacts[0].name = '')],
+    ['a blank Status name', damaged, (b) => (b.statuses[0].name = ' ')],
+    [
+      'a blank Saved search name',
+      damaged,
+      (b) => (b.savedSearches[0].name = ''),
+    ],
+    [
+      'two Companies with one name ignoring case',
+      damaged,
+      (b) => b.companies.push({ ...b.companies[0], id: 'other', name: 'ACME' }),
+    ],
+    [
+      'two Statuses with one name ignoring case',
+      damaged,
+      (b) => (b.statuses[1].name = b.statuses[0].name.toUpperCase()),
+    ],
+    [
+      'two Interviews of one type for a Role',
+      damaged,
+      (b) => b.interviews.push({ ...b.interviews[0], id: 'other' }),
+    ],
+    [
+      'a Role contact type repeated for a Contact and Role',
+      damaged,
+      (b) => b.roleContacts.push({ ...b.roleContacts[0], id: 'other' }),
+    ],
+    [
+      'an Interviewer listed twice',
+      damaged,
+      (b) => b.interviews[0].interviewerIds.push(b.contacts[0].id),
+    ],
+    [
+      'a Posting date that is no date',
+      damaged,
+      (b) => (b.roles[0].postingDate = 'x'),
+    ],
+    [
+      'a Next action date that is no date',
+      damaged,
+      (b) => (b.roles[0].nextActionDate = 'x'),
+    ],
+    [
+      'an added time that is no time',
+      damaged,
+      (b) => (b.roles[0].createdAt = 'x'),
+    ],
+    [
+      'a Posting copy saved time that is no time',
+      damaged,
+      (b) => (b.roles[0].postingCopySavedAt = 'x'),
+    ],
+    [
+      'a Status history time that is no time',
+      damaged,
+      (b) => (b.statusHistory[0].at = 'x'),
+    ],
+    [
+      'an Interview time that is no time',
+      damaged,
+      (b) => (b.interviews[0].at = 'x'),
+    ],
+    [
+      'a Last checked time that is no time',
+      damaged,
+      (b) => (b.savedSearches[0].lastCheckedAt = 'x'),
+    ],
+    [
+      'a last backup time that is no time',
+      damaged,
+      (b) => (b.settings[0].lastBackupAt = 'x'),
     ],
     ['no Settings', damaged, (b) => (b.settings = [])],
     ['a Daily target of 0', damaged, (b) => (b.settings[0].dailyTarget = 0)],

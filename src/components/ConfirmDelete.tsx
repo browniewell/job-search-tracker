@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 
-/** Ends every delete confirmation's message. */
+/** Ends every confirmation's message. */
 const cannotBeUndone = 'This can’t be undone.'
 
 /**
- * An inline delete confirmation that focuses Cancel, the safe choice. Its
- * message says what will be deleted, and it adds that this can’t be undone.
+ * An inline confirmation of a delete, or of a replace (`confirmLabel`), that
+ * focuses Cancel, the safe choice. Its message says what will go, and it adds
+ * that this can’t be undone.
  */
 export function ConfirmDelete({
   heading,

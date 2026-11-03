@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
-import { addRole, addRoleToList, exportBackup } from './seed.ts'
+import { addRole, addRoleToList, downloadFrom, exportBackup } from './seed.ts'
 
 test('Given the production build, when I add a Role, then it is listed and survives a reload', async ({
   page,
@@ -67,10 +67,8 @@ test('Given a Role, when I export Roles to CSV, then a CSV file downloads with i
 }) => {
   await addRoleToList(page, 'QA Lead, Platform')
 
-  const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export Roles to CSV' }).click()
+  const file = await downloadFrom(page, 'Export Roles to CSV')
 
-  const file = await download
   expect(file.suggestedFilename()).toBe('roles.csv')
   const text = await readFile(await file.path(), 'utf8')
   expect(text).toMatch(/^\uFEFFRole title,Status,Company,/)
