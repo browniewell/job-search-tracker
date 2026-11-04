@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ChangeEvent } from 'react'
 import { AddByNameForm } from '../components/AddByNameForm'
+import { BackupReminder } from '../components/BackupReminder'
 import { ConfirmDelete } from '../components/ConfirmDelete'
 import { FormRow } from '../components/FormRow'
 import { StatusOptions } from '../components/StatusOptions'
 import { useEditForm } from '../components/useEditForm'
 import {
   appliedStatusDeleteMessage,
+  replaceRolesMessage,
   statusHasRolesMessage,
   type Role,
   type Status,
@@ -75,7 +77,82 @@ function DailyTargetForm({ saved }: { saved: number }) {
   )
 }
 
-export function SettingsPage() {
+function RestoreBackup({ onRestored }: { onRestored: () => void }) {
+  const data = useDataLayer()
+  // The chosen file's text and the question to ask before it replaces everything.
+  const [chosen, setChosen] = useState<{
+    json: string
+    question: string
+  } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [restored, setRestored] = useState(false)
+
+  async function chooseFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    // Cleared so choosing the same file again counts as a choice.
+    event.target.value = ''
+    if (!file) return
+    setRestored(false)
+    setChosen(null)
+    try {
+      const json = await file.text()
+      const question = replaceRolesMessage(await data.previewBackup(json))
+      setChosen({ json, question })
+      setError(null)
+    } catch (cause) {
+      setError(errorMessage(cause))
+    }
+  }
+
+  async function restore(json: string) {
+    setChosen(null)
+    try {
+      await data.restoreBackup(json)
+      setError(null)
+      setRestored(true)
+      onRestored()
+    } catch (cause) {
+      setError(errorMessage(cause))
+    }
+  }
+
+  return (
+    <>
+      {error && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
+      <FormRow
+        id="restore-backup"
+        label="Restore from a backup"
+        hint="Choose a backup file. You'll see what it replaces before anything changes."
+      >
+        <input
+          id="restore-backup"
+          type="file"
+          accept="application/json,.json"
+          aria-describedby="restore-backup-hint"
+          onChange={chooseFile}
+        />
+      </FormRow>
+      {chosen && (
+        <ConfirmDelete
+          heading={chosen.question}
+          confirmLabel="Replace"
+          onConfirm={() => restore(chosen.json)}
+          onCancel={() => setChosen(null)}
+        >
+          Everything saved in this browser will be replaced with the backup,
+          including Companies, Contacts and Settings.
+        </ConfirmDelete>
+      )}
+      {restored && <p role="status">Restored from your backup.</p>}
+    </>
+  )
+}
+
+function StatusesAndDailyTarget() {
   const data = useDataLayer()
   const [statuses, setStatuses] = useState<Status[] | null>(null)
   const [roles, setRoles] = useState<Role[]>([])
@@ -143,8 +220,7 @@ export function SettingsPage() {
   const parked = statuses.find((status) => status.isParked)
 
   return (
-    <section aria-labelledby="settings-heading">
-      <h2 id="settings-heading">Settings</h2>
+    <>
       <section aria-labelledby="statuses-heading">
         <h3 id="statuses-heading">Statuses</h3>
         <p className="hint">
@@ -291,6 +367,22 @@ export function SettingsPage() {
         />
       </section>
       <DailyTargetForm saved={dailyTarget} />
+    </>
+  )
+}
+
+export function SettingsPage() {
+  // Counts restores: a new key makes what shows saved values load them afresh.
+  const [restores, setRestores] = useState(0)
+  return (
+    <section aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Settings</h2>
+      <StatusesAndDailyTarget key={restores} />
+      <section aria-labelledby="backup-heading">
+        <h3 id="backup-heading">Backup</h3>
+        <BackupReminder key={restores} />
+        <RestoreBackup onRestored={() => setRestores(restores + 1)} />
+      </section>
     </section>
   )
 }

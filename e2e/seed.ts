@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Download, type Page } from '@playwright/test'
 
 // Data the specs need before they reach the state they check, added through
 // the app in as few steps as it allows. Specs add Roles, Companies and
@@ -38,6 +38,22 @@ export async function addRoleToList(page: Page, title: string) {
 export async function addRole(page: Page, title: string) {
   await addRoleToList(page, title)
   await page.getByRole('link', { name: title }).click()
+}
+
+/** Clicks a button and resolves to the download it starts. */
+export async function downloadFrom(
+  page: Page,
+  buttonName: string,
+): Promise<Download> {
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: buttonName }).click()
+  return download
+}
+
+/** From Settings, exports a backup. Resolves to the downloaded file's path. */
+export async function exportBackup(page: Page): Promise<string> {
+  await page.goto('/#/settings')
+  return (await downloadFrom(page, 'Export backup')).path()
 }
 
 /** On a Role page, links a Contact to the Role as its hiring manager. */

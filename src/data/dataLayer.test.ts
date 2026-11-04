@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
 import { openTestDataLayer, uniqueDatabaseName } from '../test/dataLayers'
+import { replaceRolesMessage } from './dataLayer'
 import type {
   DataLayer,
   FitRating,
@@ -1436,6 +1437,31 @@ describe('Schema v11', () => {
   })
 })
 
+describe('Schema v12', () => {
+  it('Given Settings saved before backups existed (schema v11), when the database is opened, then the Daily target reads back and there is no last backup', async () => {
+    const name = uniqueDatabaseName()
+    const v11 = new Dexie(name)
+    v11.version(11).stores({
+      statuses: 'id, order',
+      roles: 'id, createdAt, companyId, statusId',
+      statusHistory: 'id, roleId',
+      companies: 'id',
+      contacts: 'id, companyId',
+      roleContacts: 'id, roleId, contactId',
+      interviews: 'id, roleId, *interviewerIds',
+      savedSearches: 'id',
+      settings: 'id',
+    })
+    await v11.table('settings').add({ id: 'settings', dailyTarget: 5 })
+    v11.close()
+
+    const data = await openTestDataLayer({ name })
+
+    expect(await data.getDailyTarget()).toBe(5)
+    expect(await data.daysSinceLastBackup()).toBeNull()
+  })
+})
+
 describe('Deleting with Contacts', () => {
   async function priyaOnTwoRoles() {
     const data = await openTestDataLayer()
@@ -2252,4 +2278,342 @@ describe('CSV export of Roles', () => {
       .map((line) => line.split(',')[0])
     expect(titles).toEqual(['Zeta', 'alpha', 'Beta'])
   })
+})
+
+describe('JSON backup', () => {
+  /** A database with a record in every table. */
+  async function openWithEveryEntity(name = uniqueDatabaseName()) {
+    const data = await openTestDataLayer({ name })
+    const company = await data.createCompany({ name: 'Acme' })
+    await data.updateCompany(company.id, { flags: ['Data monetization'] })
+    const role = await data.createRole({ title: 'Senior QA Engineer' })
+    await data.updateRole(role.id, {
+      companyId: company.id,
+      minimumSalary: 987654,
+      postingCopy: 'We are hiring',
+      postingDate: '2026-10-01',
+      nextActionDate: '2026-10-20',
+    })
+    const applied = (await data.listStatuses()).find((s) => s.isApplied)!
+    await data.changeStatus(role.id, applied.id)
+    const contact = await data.createContact({ name: 'Priya Shah' })
+    await data.linkContact({
+      roleId: role.id,
+      contactId: contact.id,
+      type: 'recruiter',
+    })
+    await data.createInterview({
+      roleId: role.id,
+      at: '2026-10-20T14:00',
+      type: 'recruiter screen',
+      interviewerIds: [contact.id],
+      notes: 'Went well',
+      followUpSent: true,
+    })
+    const search = await data.createSavedSearch({
+      name: 'QA lead',
+      link: 'https://www.linkedin.com/jobs/search?keywords=QA',
+      site: 'LinkedIn',
+    })
+    await data.markSavedSearchChecked(search.id)
+    await data.setDailyTarget(5)
+    return data
+  }
+
+  it('Given a record of every entity, when a backup is exported, then it holds every entity, every setting, the Minimum salary and the schema version, and records the last backup', async () => {
+    const data = await openWithEveryEntity()
+    expect(await data.daysSinceLastBackup()).toBeNull()
+
+    const { fileName, json } = await data.exportBackup()
+
+    const backup = JSON.parse(json)
+    expect(fileName).toBe('job-search-tracker-backup-2026-10-16.json')
+    expect(backup.schemaVersion).toBe(12)
+    expect(backup.statuses).toHaveLength(11)
+    expect(backup.roles).toHaveLength(1)
+    expect(backup.roles[0].minimumSalary).toBe(987654)
+    expect(backup.statusHistory).toHaveLength(2)
+    expect(backup.companies[0].name).toBe('Acme')
+    expect(backup.contacts[0].name).toBe('Priya Shah')
+    expect(backup.roleContacts[0].type).toBe('recruiter')
+    expect(backup.interviews[0].notes).toBe('Went well')
+    expect(backup.savedSearches[0].name).toBe('QA lead')
+    expect(backup.settings).toEqual([
+      {
+        id: 'settings',
+        dailyTarget: 5,
+        lastBackupAt: '2026-10-16T14:30:00.000Z',
+      },
+    ])
+    expect(await data.daysSinceLastBackup()).toBe(0)
+  })
+  it.each([
+    ['later the same local day', '2026-10-17T04:59:00.000Z', 0],
+    ['just past local midnight', '2026-10-17T05:01:00.000Z', 1],
+    [
+      '18 days on, across the clocks going back',
+      '2026-11-03T15:00:00.000Z',
+      18,
+    ],
+  ])(
+    'Given a backup at 9:30 local time, when the clock reads %s, then the days since it are counted by the local calendar day',
+    async (_, later, days) => {
+      let now = new Date('2026-10-16T14:30:00.000Z')
+      const data = await openTestDataLayer({ clock: () => now })
+      await data.exportBackup()
+
+      now = new Date(later)
+
+      expect(await data.daysSinceLastBackup()).toBe(days)
+    },
+  )
+
+  it('Given a backup, when data changes and the backup is restored, then every entity is exactly as it was exported', async () => {
+    const data = await openWithEveryEntity()
+    const { json } = await data.exportBackup()
+    await data.createRole({ title: 'Added after the backup' })
+    await data.deleteContact((await data.listContacts())[0].id)
+    await data.setDailyTarget(9)
+
+    await data.restoreBackup(json)
+
+    expect(JSON.parse((await data.exportBackup()).json)).toEqual(
+      JSON.parse(json),
+    )
+    expect((await data.listRoles()).map((r) => r.title)).toEqual([
+      'Senior QA Engineer',
+    ])
+    expect(await data.getDailyTarget()).toBe(5)
+  })
+
+  it('Given a backup, when it is restored into a browser with no data, then every entity is exactly as it was exported', async () => {
+    const data = await openWithEveryEntity()
+    const { json } = await data.exportBackup()
+    const fresh = await openTestDataLayer()
+
+    await fresh.restoreBackup(json)
+
+    expect((await fresh.exportBackup()).json).toBe(json)
+  })
+
+  it('Given 2 Roles and a backup of 1, when the backup is previewed, then nothing changes and the counts say Replace 2 Roles with 1 from backup', async () => {
+    const data = await openWithEveryEntity()
+    const { json } = await data.exportBackup()
+    await data.createRole({ title: 'Added after the backup' })
+
+    const preview = await data.previewBackup(json)
+
+    expect(replaceRolesMessage(preview)).toBe(
+      'Replace 2 Roles with 1 from backup?',
+    )
+    expect(await data.listRoles()).toHaveLength(2)
+  })
+  it('Given two Interviews of one type at different times, when the backup is restored, then both are kept', async () => {
+    const data = await openWithEveryEntity()
+    const [role] = await data.listRoles()
+    await data.createInterview({
+      roleId: role.id,
+      at: '2026-10-27T14:00',
+      type: 'recruiter screen',
+      interviewerIds: [],
+      notes: null,
+      followUpSent: false,
+    })
+    const { json } = await data.exportBackup()
+
+    await data.restoreBackup(json)
+
+    expect(await data.listInterviews(role.id)).toHaveLength(2)
+  })
+
+  const notABackup = "This file isn't a Job Search Tracker backup."
+  const otherVersion =
+    "This backup is from a different version of the app, so it can't be restored."
+  const damaged = "This backup is damaged, so it can't be restored."
+
+  it.each([
+    ['text that is not JSON', 'not json', notABackup],
+    ['JSON that is not an object', '[]', notABackup],
+    ['an object with no schema version', '{"roles":[]}', notABackup],
+  ])(
+    'Given %s, when it is previewed or restored, then it is refused and nothing changes',
+    async (_, json, message) => {
+      const data = await openWithEveryEntity()
+
+      await expect(data.previewBackup(json)).rejects.toThrow(message)
+      await expect(data.restoreBackup(json)).rejects.toThrow(message)
+
+      expect(await data.listRoles()).toHaveLength(1)
+    },
+  )
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a backup as any file could hold it
+  type BackupFile = Record<string, any>
+
+  it.each<[string, string, (backup: BackupFile) => void]>([
+    ['an older schema version', otherVersion, (b) => (b.schemaVersion = 11)],
+    ['a newer schema version', otherVersion, (b) => (b.schemaVersion = 13)],
+    ['a missing table', damaged, (b) => delete b.contacts],
+    ['a table that is not a list', damaged, (b) => (b.roles = {})],
+    ['a Role with a missing field', damaged, (b) => delete b.roles[0].notes],
+    ['a Role with an unknown field', damaged, (b) => (b.roles[0].extra = 1)],
+    ['a Role title that is not text', damaged, (b) => (b.roles[0].title = 5)],
+    [
+      'an unknown Work arrangement',
+      damaged,
+      (b) => (b.roles[0].workArrangement = 'moon'),
+    ],
+    ['a Fit rating of 9', damaged, (b) => (b.roles[0].fitRating = 9)],
+    [
+      'two records with one id',
+      damaged,
+      (b) => b.companies.push(b.companies[0]),
+    ],
+    [
+      'a Role in a missing Status',
+      damaged,
+      (b) => (b.roles[0].statusId = 'gone'),
+    ],
+    [
+      'a Role at a missing Company',
+      damaged,
+      (b) => (b.roles[0].companyId = 'gone'),
+    ],
+    [
+      'a Contact at a missing Company',
+      damaged,
+      (b) => (b.contacts[0].companyId = 'gone'),
+    ],
+    [
+      'Status history for a missing Role',
+      damaged,
+      (b) => (b.statusHistory[0].roleId = 'gone'),
+    ],
+    [
+      'a Role contact for a missing Role',
+      damaged,
+      (b) => (b.roleContacts[0].roleId = 'gone'),
+    ],
+    [
+      'a Role contact for a missing Contact',
+      damaged,
+      (b) => (b.roleContacts[0].contactId = 'gone'),
+    ],
+    [
+      'an Interview for a missing Role',
+      damaged,
+      (b) => (b.interviews[0].roleId = 'gone'),
+    ],
+    [
+      'an Interview with a missing Interviewer',
+      damaged,
+      (b) => b.interviews[0].interviewerIds.push('gone'),
+    ],
+    [
+      'no Applied status',
+      damaged,
+      (b) => b.statuses.forEach((s: BackupFile) => (s.isApplied = false)),
+    ],
+    [
+      'two Applied statuses',
+      damaged,
+      (b) =>
+        (b.statuses.find((s: BackupFile) => !s.isApplied).isApplied = true),
+    ],
+    [
+      'two Parked statuses',
+      damaged,
+      (b) => (b.statuses.find((s: BackupFile) => !s.isParked).isParked = true),
+    ],
+    ['a blank Role title', damaged, (b) => (b.roles[0].title = '  ')],
+    ['a blank Company name', damaged, (b) => (b.companies[0].name = '')],
+    ['a blank Contact name', damaged, (b) => (b.contacts[0].name = '')],
+    ['a blank Status name', damaged, (b) => (b.statuses[0].name = ' ')],
+    [
+      'a blank Saved search name',
+      damaged,
+      (b) => (b.savedSearches[0].name = ''),
+    ],
+    [
+      'two Companies with one name ignoring case',
+      damaged,
+      (b) => b.companies.push({ ...b.companies[0], id: 'other', name: 'ACME' }),
+    ],
+    [
+      'two Statuses with one name ignoring case',
+      damaged,
+      (b) => (b.statuses[1].name = b.statuses[0].name.toUpperCase()),
+    ],
+    [
+      'two Interviews of one type for a Role',
+      damaged,
+      (b) => b.interviews.push({ ...b.interviews[0], id: 'other' }),
+    ],
+    [
+      'a Role contact type repeated for a Contact and Role',
+      damaged,
+      (b) => b.roleContacts.push({ ...b.roleContacts[0], id: 'other' }),
+    ],
+    [
+      'an Interviewer listed twice',
+      damaged,
+      (b) => b.interviews[0].interviewerIds.push(b.contacts[0].id),
+    ],
+    [
+      'a Posting date that is no date',
+      damaged,
+      (b) => (b.roles[0].postingDate = 'x'),
+    ],
+    [
+      'a Next action date that is no date',
+      damaged,
+      (b) => (b.roles[0].nextActionDate = 'x'),
+    ],
+    [
+      'an added time that is no time',
+      damaged,
+      (b) => (b.roles[0].createdAt = 'x'),
+    ],
+    [
+      'a Posting copy saved time that is no time',
+      damaged,
+      (b) => (b.roles[0].postingCopySavedAt = 'x'),
+    ],
+    [
+      'a Status history time that is no time',
+      damaged,
+      (b) => (b.statusHistory[0].at = 'x'),
+    ],
+    [
+      'an Interview time that is no time',
+      damaged,
+      (b) => (b.interviews[0].at = 'x'),
+    ],
+    [
+      'a Last checked time that is no time',
+      damaged,
+      (b) => (b.savedSearches[0].lastCheckedAt = 'x'),
+    ],
+    [
+      'a last backup time that is no time',
+      damaged,
+      (b) => (b.settings[0].lastBackupAt = 'x'),
+    ],
+    ['no Settings', damaged, (b) => (b.settings = [])],
+    ['a Daily target of 0', damaged, (b) => (b.settings[0].dailyTarget = 0)],
+  ])(
+    'Given a backup with %s, when it is previewed or restored, then it is refused and nothing changes',
+    async (_, message, change) => {
+      const data = await openWithEveryEntity()
+      const backup = JSON.parse((await data.exportBackup()).json)
+      change(backup)
+      const json = JSON.stringify(backup)
+
+      await expect(data.previewBackup(json)).rejects.toThrow(message)
+      await expect(data.restoreBackup(json)).rejects.toThrow(message)
+
+      expect(await data.listRoles()).toHaveLength(1)
+      expect(await data.listContacts()).toHaveLength(1)
+    },
+  )
 })

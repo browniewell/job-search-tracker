@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { HashRouter, NavLink, Route, Routes } from 'react-router'
 import { CompaniesPage } from './companies/CompaniesPage'
 import { CompanyDetailPage } from './companies/CompanyDetailPage'
@@ -11,7 +12,19 @@ import { RolesPage } from './roles/RolesPage'
 import { SavedSearchesPage } from './savedSearches/SavedSearchesPage'
 import { SettingsPage } from './settings/SettingsPage'
 
+// Asks the browser not to clear saved data under storage pressure. Browsers
+// remember the answer, so this asks once unless a browser decides again later;
+// some offer no way to ask (navigator.storage is missing on insecure origins).
+async function requestPersistentStorage() {
+  const storage = navigator.storage
+  if (storage && !(await storage.persisted())) await storage.persist()
+}
+
 export function App({ data }: { data: DataLayer }) {
+  useEffect(() => {
+    requestPersistentStorage()
+  }, [])
+
   return (
     <DataLayerContext value={data}>
       <HashRouter>

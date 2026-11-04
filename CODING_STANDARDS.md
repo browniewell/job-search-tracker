@@ -11,7 +11,8 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
 - **Schema changes.** A change to the fields a Role, Company or other stored entity is saved with ships with all of these:
   - a new Dexie version with an upgrade that brings existing records to the new shape;
   - a test that opens a database at the previous version and reads a record back;
-  - a new entry in the tripwire's `storedFields` for the new version.
+  - a new entry in the tripwire's `storedFields` for the new version;
+  - a way to restore a backup saved at the previous version, which `parseBackup` refuses until then, so a backup someone already holds stays restorable.
 
   An entry for a version that has reached main stays as it is: editing it in place, rather than adding a version, is a breach, because browsers already hold data in that shape.
 
