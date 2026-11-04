@@ -1,3 +1,4 @@
+import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
 import {
   openDataLayer,
@@ -11,6 +12,10 @@ export const fixedClock: Clock = () => new Date('2026-10-16T14:30:00.000Z')
 const openDataLayers: DataLayer[] = []
 
 afterEach(() => {
+  // Unmounted first, which runs any effect still pending while its database is
+  // open: a read that starts after the close rejects with nothing to catch it.
+  // Hooks run last-registered first, so setup.ts's cleanup would come too late.
+  cleanup()
   openDataLayers.splice(0).forEach((data) => data.close())
 })
 
