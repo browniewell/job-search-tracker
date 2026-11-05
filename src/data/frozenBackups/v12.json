@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 12,
+  "statuses": [
+    {
+      "id": "id-0999999989",
+      "order": 10,
+      "name": "Passed",
+      "closed": true,
+      "isApplied": false,
+      "isParked": false
+    },
+    {
+      "id": "id-0999999990",
+      "order": 9,
+      "name": "Withdrawn",
+      "closed": true,
+      "isApplied": false,
+      "isParked": false
+    },
+    {
+      "id": "id-0999999991",
+      "order": 8,
+      "name": "No Response",
+      "closed": true,
+      "isApplied": false,
+      "isParked": false
+    },
+    {
+      "id": "id-0999999992",
+      "order": 7,
+      "name": "Rejected",
+      "closed": true,
+      "isApplied": false,
+      "isParked": false
+    },
+    {
+      "id": "id-0999999993",
+      "order": 6,
+      "name": "Accepted",
+      "closed": true,
+      "isApplied": false,
+      "isParked": false
+    },
+    {
+      "id": "id-0999999994",
+      "order": 5,
+      "name": "Offer",
+      "closed": false,
+      "isApplied": false,
+      "isParked": false
+    },
+    {
+      "id": "id-0999999995",
+      "order": 4,
+      "name": "Interviewing",
+      "closed": false,
+      "isApplied": false,
+      "isParked": false
+    },
+    {
+      "id": "id-0999999996",
+      "order": 3,
+      "name": "Recruiter Screen",
+      "closed": false,
+      "isApplied": false,
+      "isParked": false
+    },
+    {
+      "id": "id-0999999997",
+      "order": 2,
+      "name": "Applied",
+      "closed": false,
+      "isApplied": true,
+      "isParked": false
+    },
+    {
+      "id": "id-0999999998",
+      "order": 1,
+      "name": "Parked",
+      "closed": false,
+      "isApplied": false,
+      "isParked": true
+    },
+    {
+      "id": "id-0999999999",
+      "order": 0,
+      "name": "Interested",
+      "closed": false,
+      "isApplied": false,
+      "isParked": false
+    }
+  ],
+  "roles": [
+    {
+      "id": "id-0999999987",
+      "companyId": "id-0999999988",
+      "location": null,
+      "workArrangement": null,
+      "salaryMin": null,
+      "salaryMax": null,
+      "salaryPeriod": null,
+      "salaryNote": null,
+      "expectedSalary": null,
+      "minimumSalary": 987654,
+      "roleSummary": null,
+      "postingLink": null,
+      "hiringSiteLink": null,
+      "postingDate": "2026-10-01",
+      "postingCopy": "We are hiring",
+      "fitNotes": null,
+      "fitRating": null,
+      "referralSubmitted": false,
+      "flags": [],
+      "nextAction": null,
+      "nextActionDate": "2026-10-20",
+      "parkedReason": null,
+      "notes": null,
+      "postingCopySavedAt": "2026-10-16T14:30:00.000Z",
+      "title": "Senior QA Engineer",
+      "statusId": "id-0999999997",
+      "createdAt": "2026-10-16T14:30:00.000Z"
+    }
+  ],
+  "statusHistory": [
+    {
+      "id": "id-0999999985",
+      "roleId": "id-0999999987",
+      "fromStatusId": "id-0999999999",
+      "fromStatusName": "Interested",
+      "toStatusId": "id-0999999997",
+      "toStatusName": "Applied",
+      "at": "2026-10-16T14:30:00.000Z",
+      "imported": false,
+      "sequence": 1
+    },
+    {
+      "id": "id-0999999986",
+      "roleId": "id-0999999987",
+      "fromStatusId": null,
+      "fromStatusName": null,
+      "toStatusId": "id-0999999999",
+      "toStatusName": "Interested",
+      "at": "2026-10-16T14:30:00.000Z",
+      "imported": false,
+      "sequence": 0
+    }
+  ],
+  "companies": [
+    {
+      "id": "id-0999999988",
+      "industry": null,
+      "summary": null,
+      "website": null,
+      "size": null,
+      "flags": ["Data monetization"],
+      "notes": null,
+      "name": "Acme"
+    }
+  ],
+  "contacts": [
+    {
+      "id": "id-0999999984",
+      "title": null,
+      "companyId": null,
+      "howYouKnow": null,
+      "email": null,
+      "linkedIn": null,
+      "notes": null,
+      "name": "Priya Shah"
+    }
+  ],
+  "roleContacts": [
+    {
+      "id": "id-0999999983",
+      "roleId": "id-0999999987",
+      "contactId": "id-0999999984",
+      "type": "recruiter"
+    }
+  ],
+  "interviews": [
+    {
+      "id": "id-0999999982",
+      "roleId": "id-0999999987",
+      "at": "2026-10-20T14:00",
+      "type": "recruiter screen",
+      "interviewerIds": ["id-0999999984"],
+      "notes": "Went well",
+      "followUpSent": true
+    }
+  ],
+  "savedSearches": [
+    {
+      "id": "id-0999999981",
+      "name": "QA lead",
+      "link": "https://www.linkedin.com/jobs/search?keywords=QA",
+      "site": "LinkedIn",
+      "lastCheckedAt": "2026-10-16T14:30:00.000Z"
+    }
+  ],
+  "settings": [
+    {
+      "id": "settings",
+      "dailyTarget": 5,
+      "lastBackupAt": "2026-10-16T14:30:00.000Z"
+    }
+  ]
+}

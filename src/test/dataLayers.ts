@@ -14,7 +14,7 @@ const openDataLayers: DataLayer[] = []
 afterEach(() => {
   // Unmounted first, which runs any effect still pending while its database is
   // open: a read that starts after the close rejects with nothing to catch it.
-  // Hooks run last-registered first, so setup.ts's cleanup would come too late.
+  // Hooks run last-registered first, so setup-ui.ts's cleanup would come too late.
   cleanup()
   openDataLayers.splice(0).forEach((data) => data.close())
 })
