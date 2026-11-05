@@ -1,6 +1,6 @@
 # Coding standards
 
-Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002, imports from another area, copies of `errorMessage`, specs that add Roles, Companies or Contacts outside `e2e/seed.ts`, and JSX accessibility), Prettier, tsc (including `exactOptionalPropertyTypes`, so a partial edit can't overwrite a field with `undefined`), the schema tripwire in `src/data/schema.test.ts`, and the `e2e/layout-*.spec.ts` files, one per area, which check every page for overflow and run axe on it in both themes. A new page's checks go in its area's file, using the helpers in `e2e/layout.ts`. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
+Judgement calls for reviewing a change. Mechanical rules live in tooling instead: ESLint (including Dexie imports outside `src/data`, ADR-0002, imports from another area, copies of `errorMessage`, specs that add Roles, Companies or Contacts outside `e2e/seed.ts`, and JSX accessibility), Prettier, tsc (including `exactOptionalPropertyTypes`, so a partial edit can't overwrite a field with `undefined`), the schema tripwire in `src/data/schema.test.ts`, the frozen backups in `src/data/frozenBackups`, and the `e2e/layout-*.spec.ts` files, one per area, which check every page for overflow and run axe on it in both themes. A new page's checks go in its area's file, using the helpers in `e2e/layout.ts`. Vocabulary is defined in `GLOSSARY.md`; architecture in `docs/adr/`.
 
 ## Code
 
@@ -12,10 +12,12 @@ Judgement calls for reviewing a change. Mechanical rules live in tooling instead
   - a new Dexie version with an upgrade that brings existing records to the new shape;
   - a test that opens a database at the previous version and reads a record back;
   - a new entry in the tripwire's `storedFields` for the new version;
-  - a way to restore a backup saved at the previous version, which `parseBackup` refuses until then, so a backup someone already holds stays restorable.
+  - a way to restore a backup saved at the previous version, which `parseBackup` refuses until then, so a backup someone already holds stays restorable;
+  - a backup saved at the new version in `src/data/frozenBackups`, where every file stays as it is and is restored by a test.
 
   An entry for a version that has reached main stays as it is: editing it in place, rather than adding a version, is a breach, because browsers already hold data in that shape.
 
+- **A file from outside is checked for everything the app assumes of a stored record**, not only its shape: a bad date in a backup passed a shape check, then crashed the Roles table.
 - **Empty values are `null`**, with every field present on every record. Booleans default to `false` and lists, such as Flags, to `[]`. Empty strings never stand in for "not set".
 - **Domain rules live in the data layer.** Validation and deletion rules (blank names, Fit rating range, a Company with Roles) are enforced in `src/data`. The UI may check first for a better flow, but it shows the data layer's own error message rather than writing its own.
 - **Time comes from the injected clock.** Timestamps are ISO strings from `clock()`. Calendar dates the user picks are `YYYY-MM-DD` strings, and dates with a time, such as an Interview's, are local `YYYY-MM-DDTHH:mm` strings: shown as written, with no time zone.

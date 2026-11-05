@@ -2396,6 +2396,38 @@ describe('JSON backup', () => {
     expect((await fresh.exportBackup()).json).toBe(json)
   })
 
+  // A backup someone already holds stays restorable (CODING_STANDARDS.md). These
+  // files are frozen: a new schema version goes red here until it can restore
+  // them, and adds a file of its own. The checks read through the data layer, so
+  // a new version's fields don't change them.
+  it.each(
+    Object.entries(
+      import.meta.glob<string>('./frozenBackups/*.json', {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      }),
+    ),
+  )(
+    'Given the backup saved at %s, when it is restored, then every entity reads back',
+    async (_, json) => {
+      const data = await openTestDataLayer()
+
+      await data.restoreBackup(json)
+
+      const [role] = await data.listRoles()
+      expect(role.title).toBe('Senior QA Engineer')
+      expect(role.minimumSalary).toBe(987654)
+      expect(await data.listStatuses()).toHaveLength(11)
+      expect((await data.listCompanies())[0].name).toBe('Acme')
+      expect((await data.listContacts())[0].name).toBe('Priya Shah')
+      expect((await data.listRoleContacts(role.id))[0].type).toBe('recruiter')
+      expect((await data.listInterviews(role.id))[0].notes).toBe('Went well')
+      expect((await data.listSavedSearches())[0].name).toBe('QA lead')
+      expect(await data.getDailyTarget()).toBe(5)
+    },
+  )
+
   it('Given 2 Roles and a backup of 1, when the backup is previewed, then nothing changes and the counts say Replace 2 Roles with 1 from backup', async () => {
     const data = await openWithEveryEntity()
     const { json } = await data.exportBackup()
